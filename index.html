@@ -1,0 +1,4648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ludo 3D</title>
+<meta name="description" content="3D Ludo for 2 to 4 players. Play against bots, pass one phone around, or invite friends to an online table with a link.">
+<meta property="og:title" content="Ludo 3D">
+<meta property="og:description" content="Roll, race and capture. Tap the link to join my table.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0c122e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='52' height='52' rx='13' fill='%23f2a33a'/%3E%3Ccircle cx='20' cy='20' r='6' fill='%23141826'/%3E%3Ccircle cx='32' cy='32' r='6.5' fill='%23e5383b'/%3E%3Ccircle cx='44' cy='44' r='6' fill='%23141826'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Hind:wght@400;500;600&display=swap">
+<style>
+:root {
+  /* layout: full-bleed 3D table; each seat card pinned to the screen corner nearest its yard; one roll button at the bottom centre; menus rise as bottom sheets */
+  --cloth: #0c122e;
+  --panel: rgba(17, 24, 58, 0.9);
+  --line: rgba(255, 233, 200, 0.14);
+  --ivory: #f6efe1;
+  --muted: #aab2d8;
+  --marigold: #f2a33a;
+  --red: #e5383b;
+  --green: #22a75b;
+  --yellow: #f6c22a;
+  --blue: #2e6fe4;
+  --font-display: "Baloo 2", "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-body: "Hind", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--cloth);
+  color: var(--ivory);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.4;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 3px solid var(--marigold); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#vignette {
+  position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 46%, rgba(12, 18, 46, 0) 52%, rgba(6, 9, 26, 0.55) 100%);
+}
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+.seat {
+  position: absolute;
+  width: min(168px, calc(50vw - 64px));
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 8px 8px 9px 10px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transition: box-shadow 0.25s, border-color 0.25s, opacity 0.25s, transform 0.25s;
+  overflow: hidden;
+}
+.seat.tl { top: calc(10px + var(--safe-t)); left: calc(10px + var(--safe-l)); }
+.seat.tr { top: calc(10px + var(--safe-t)); right: calc(10px + var(--safe-r)); }
+.seat.bl { bottom: calc(10px + var(--safe-b)); left: calc(10px + var(--safe-l)); }
+.seat.br { bottom: calc(10px + var(--safe-b)); right: calc(10px + var(--safe-r)); }
+.seat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--seat); }
+.seat .pawn { grid-row: 1 / span 3; width: 30px; height: 30px; border-radius: 50%; background: var(--seat); display: grid; place-items: center; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25); }
+.seat .pawn svg { width: 18px; height: 18px; }
+.seat .name { font-family: var(--font-display); font-weight: 700; font-size: 16px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.seat .sub { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.seat .dots { display: flex; gap: 4px; margin-top: 3px; }
+.seat .dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--seat); opacity: 0.75; }
+.seat .dots i.on { background: var(--seat); opacity: 1; }
+.seat .timer { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.08); }
+.seat .timer i { display: block; height: 100%; width: 100%; background: var(--marigold); transform-origin: left; }
+.seat .rank { position: absolute; top: 6px; right: 8px; font-family: var(--font-display); font-weight: 800; font-size: 13px; color: var(--marigold); }
+.seat.active { border-color: var(--marigold); box-shadow: 0 0 0 2px var(--marigold), 0 8px 26px rgba(242, 163, 58, 0.35); }
+.seat.active .sub { color: var(--ivory); }
+.seat.off { opacity: 0.4; }
+.seat.done { opacity: 0.72; }
+.seat.away .sub { color: #ffb4a8; }
+
+#roll {
+  position: absolute; left: 50%; bottom: calc(12px + var(--safe-b));
+  transform: translateX(-50%);
+  width: 78px; height: 78px; border-radius: 50%;
+  border: 0; padding: 0;
+  background: var(--marigold); color: #2a1604;
+  box-shadow: 0 0 0 4px rgba(242, 163, 58, 0.25), 0 10px 24px rgba(0, 0, 0, 0.45);
+  display: grid; place-items: center; align-content: center; gap: 2px;
+  transition: transform 0.15s, background 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+#roll:active { transform: translateX(-50%) scale(0.94); }
+#roll:disabled { background: #2b345f; color: var(--muted); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); cursor: default; }
+#roll .face { width: 30px; height: 30px; border-radius: 8px; background: #fff7e6; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 4px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15); }
+#roll:disabled .face { background: #c9cde6; }
+#roll .face i { width: 6px; height: 6px; border-radius: 50%; background: #1b2142; place-self: center; visibility: hidden; }
+#roll .face i.on { visibility: visible; }
+#roll .face.one i.on { background: #c4242a; width: 9px; height: 9px; }
+#roll .lbl { font-family: var(--font-display); font-weight: 800; font-size: 14px; line-height: 1; letter-spacing: 0.02em; }
+#roll.ready { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { box-shadow: 0 0 0 10px rgba(242, 163, 58, 0.12), 0 10px 24px rgba(0, 0, 0, 0.45); } }
+
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--panel); border: 1px solid var(--line);
+  display: grid; place-items: center; padding: 0;
+}
+.icon-btn svg { width: 22px; height: 22px; }
+#topBtns { position: absolute; top: calc(16px + var(--safe-t)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+#topBtns .icon-btn { width: 42px; height: 42px; }
+#viewBtn svg { width: 19px; height: 19px; }
+#netChip {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(100px + var(--safe-b));
+  font-size: 12.5px; padding: 3px 10px; border-radius: 999px;
+  background: rgba(17, 24, 58, 0.8); border: 1px solid var(--line); color: var(--muted);
+  white-space: nowrap; pointer-events: none;
+}
+#netChip.warn { color: #ffcf8f; border-color: rgba(242, 163, 58, 0.5); }
+#toast {
+  position: fixed; left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(0.92);
+  max-width: min(86vw, 420px);
+  padding: 10px 18px; border-radius: 16px;
+  background: rgba(14, 19, 46, 0.92); border: 1px solid var(--line);
+  font-family: var(--font-display); font-weight: 700; font-size: 19px; line-height: 1.2; text-align: center;
+  text-wrap: balance;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s, transform 0.22s;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+#toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+#toast b { color: var(--marigold); font-weight: 800; }
+
+@media (orientation: landscape) {
+  .seat { width: 184px; }
+  #topBtns { top: calc(12px + var(--safe-t)); }
+  #roll { left: auto; right: calc(212px + var(--safe-r)); transform: none; }
+  #roll:active { transform: scale(0.94); }
+  #netChip { bottom: calc(14px + var(--safe-b)); }
+}
+/* phones on their side: cards and controls in two side columns, board in the middle */
+@media (orientation: landscape) and (max-height: 599px) {
+  .seat { width: 172px; }
+  #roll { right: calc(62px + var(--safe-r)); top: 50%; bottom: auto; transform: translateY(-50%); width: 68px; height: 68px; }
+  #roll:active { transform: translateY(-50%) scale(0.94); }
+  #topBtns { left: calc(51px + var(--safe-l)); top: 50%; transform: translateY(-50%); }
+  #netChip { top: calc(6px + var(--safe-t)); bottom: auto; font-size: 11.5px; }
+}
+
+/* ---------- title + sheets ---------- */
+#title {
+  position: fixed; left: calc(22px + var(--safe-l)); top: calc(22px + var(--safe-t));
+  pointer-events: none;
+}
+#title h1 {
+  margin: 0; font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(64px, 19vw, 118px); line-height: 0.82; letter-spacing: -0.01em;
+  display: flex; gap: 0.02em;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.28), 0 18px 40px rgba(0, 0, 0, 0.4);
+}
+#title h1 span:nth-child(1) { color: var(--red); }
+#title h1 span:nth-child(2) { color: var(--green); }
+#title h1 span:nth-child(3) { color: var(--yellow); }
+#title h1 span:nth-child(4) { color: var(--blue); }
+#title p { margin: 10px 0 0 4px; font-size: 15px; color: var(--ivory); opacity: 0.85; max-width: 22ch; }
+
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  margin: 0 auto;
+  width: min(100%, 520px);
+  max-height: calc(100% - 24px - var(--safe-t));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 18px calc(18px + var(--safe-r)) calc(18px + var(--safe-b)) calc(18px + var(--safe-l));
+  background: var(--panel);
+  border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  -webkit-user-select: text; user-select: text;
+  animation: rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex; flex-direction: column; gap: 14px;
+}
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+@media (orientation: landscape) and (min-width: 760px) {
+  .sheet { left: calc(24px + var(--safe-l)); right: auto; bottom: 24px; margin: 0; width: 420px; border-radius: 24px; border-bottom: 1px solid var(--line); max-height: calc(100% - 48px); }
+  #title h1 { font-size: clamp(64px, 9vw, 112px); }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  #title { display: none; }
+}
+.sheet h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 26px; line-height: 1.1; text-wrap: balance; }
+.sheet h3 { margin: 4px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.sheet p { margin: 0; color: var(--muted); max-width: 60ch; }
+.sheet .head { display: flex; align-items: center; gap: 10px; }
+.sheet .head h2 { flex: 1; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.choice {
+  display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line);
+}
+.choice .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.07); }
+.choice .ico svg { width: 24px; height: 24px; }
+.choice b { display: block; font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1.15; }
+.choice small { display: block; color: var(--muted); font-size: 13.5px; line-height: 1.3; }
+.choice .chev { color: var(--muted); font-size: 22px; }
+.choice.primary { background: var(--marigold); color: #2a1604; border-color: transparent; }
+.choice.primary small, .choice.primary .chev { color: rgba(42, 22, 4, 0.75); }
+.choice.primary .ico { background: rgba(42, 22, 4, 0.12); }
+.choice:disabled { opacity: 0.5; cursor: default; }
+
+.btn {
+  min-height: 48px; padding: 0 18px; border-radius: 14px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06);
+  font-family: var(--font-display); font-weight: 700; font-size: 17px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn.primary { background: var(--marigold); color: #2a1604; border-color: transparent; }
+.btn.wide { width: 100%; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.small { min-height: 36px; font-size: 14.5px; padding: 0 12px; border-radius: 11px; }
+.link { background: none; border: 0; padding: 6px 2px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-size: 14.5px; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 13.5px; color: var(--muted); }
+.input {
+  min-height: 46px; padding: 0 14px; border-radius: 12px; width: 100%;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25);
+  font-size: 17px;
+}
+.input.code { text-transform: uppercase; letter-spacing: 0.24em; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
+
+.swatches { display: flex; gap: 10px; }
+.swatch { width: 52px; height: 52px; border-radius: 50%; border: 3px solid transparent; background: var(--seat); display: grid; place-items: center; padding: 0; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.25); }
+.swatch[aria-pressed="true"] { border-color: var(--ivory); box-shadow: 0 0 0 3px var(--marigold); }
+.swatch svg { width: 26px; height: 26px; }
+.seg { display: inline-flex; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 7px 12px; border-radius: 9px; font-size: 14.5px; font-weight: 600; color: var(--muted); min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--ivory); color: #151a36; }
+
+.seatrow { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.seatrow .dot { width: 12px; height: 34px; border-radius: 6px; background: var(--seat); }
+.seatrow .input { min-height: 38px; font-size: 15.5px; padding: 0 10px; }
+.seatrow .who b { font-family: var(--font-display); font-weight: 700; font-size: 16.5px; display: block; line-height: 1.15; }
+.seatrow .who small { color: var(--muted); font-size: 13px; }
+.seatrow.you { border-color: rgba(242, 163, 58, 0.6); }
+
+.toggle { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 6px 0; }
+.toggle span { font-size: 15.5px; }
+.toggle small { display: block; color: var(--muted); font-size: 13px; }
+.switch { appearance: none; -webkit-appearance: none; width: 48px; height: 28px; border-radius: 999px; background: #2b345f; position: relative; margin: 0; cursor: pointer; transition: background 0.2s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--ivory); transition: transform 0.2s; }
+.switch:checked { background: var(--marigold); }
+.switch:checked::after { transform: translateX(20px); }
+
+.codebox { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 16px; background: rgba(0, 0, 0, 0.28); border: 1px dashed rgba(242, 163, 58, 0.55); }
+.codebox .code { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: 0.18em; color: var(--marigold); line-height: 1; }
+.tables { display: flex; flex-direction: column; gap: 8px; }
+.tables .empty { color: var(--muted); font-size: 14.5px; padding: 8px 2px; }
+.note { font-size: 13.5px; color: var(--muted); padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.note.warn { color: #ffd59e; border-color: rgba(242, 163, 58, 0.4); }
+
+.standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; counter-reset: place; }
+.standings li { display: grid; grid-template-columns: 40px 14px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.standings .place { font-family: var(--font-display); font-weight: 800; font-size: 20px; color: var(--muted); }
+.standings li:first-child { background: rgba(242, 163, 58, 0.16); border-color: rgba(242, 163, 58, 0.55); }
+.standings li:first-child .place { color: var(--marigold); }
+.standings .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--seat); }
+.standings b { font-family: var(--font-display); font-weight: 700; font-size: 17px; }
+.standings small { color: var(--muted); font-size: 13px; }
+.trophy { width: 64px; height: 64px; }
+
+.rules { margin: 0; padding-left: 20px; color: var(--ivory); display: flex; flex-direction: column; gap: 8px; max-width: 60ch; }
+.rules li::marker { color: var(--marigold); font-weight: 700; }
+.rules b { color: var(--marigold); font-weight: 600; }
+
+#fatal { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--cloth); text-align: center; }
+#fatal div { max-width: 40ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: none; }
+  #roll.ready { animation: none; }
+  #toast { transition: opacity 0.1s; }
+}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="3D Ludo board"></canvas>
+<div id="vignette"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-pawn" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.2a3.4 3.4 0 0 1 2.1 6.1c.9.4 1.4 1.1 1.4 1.8 0 .6-.4 1.1-1 1.5.6 2.4 1.6 4.6 3.4 6.2.5.4.7.9.7 1.4v.6c0 .9-.7 1.6-1.6 1.6H7c-.9 0-1.6-.7-1.6-1.6v-.6c0-.5.2-1 .7-1.4 1.8-1.6 2.8-3.8 3.4-6.2-.6-.4-1-.9-1-1.5 0-.7.5-1.4 1.4-1.8A3.4 3.4 0 0 1 12 2.2Z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M5 7h14M5 12h14M5 17h14"/></symbol>
+    <symbol id="i-view" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6M18 3v4h-4M6 21v-4h4"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5"/></g></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M3 19c.6-3 2.9-5 5.5-5s4.9 2 5.5 5M14.5 14.4c.6-.3 1.3-.4 2-.4 2.2 0 4 1.6 4.5 4.5"/></g></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5M12 3.5C9.6 5.9 8.4 8.7 8.4 12s1.2 6.1 3.6 8.5"/></g></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.9l10.2-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 64 64"><path fill="#f2a33a" d="M18 8h28v14c0 9-6 16-14 16s-14-7-14-16V8Z"/><path fill="none" stroke="#f2a33a" stroke-width="4" d="M18 14H9c0 8 4 12 10 13M46 14h9c0 8-4 12-10 13"/><path fill="#c87e22" d="M27 38h10l2 10H25l2-10Z"/><rect x="18" y="48" width="28" height="8" rx="3" fill="#f2a33a"/><path fill="#fff4d8" opacity=".55" d="M24 12h5v10c0 4 1 7 3 9-5-1-8-5-8-10V12Z"/></symbol>
+  </defs>
+</svg>
+
+<div id="title">
+  <h1 aria-label="Ludo"><span>L</span><span>U</span><span>D</span><span>O</span></h1>
+  <p>Roll, race and capture. Four pawns each, one way home.</p>
+</div>
+
+<!-- in-game HUD -->
+<div id="hud" hidden>
+  <div class="seat" data-seat="0"></div>
+  <div class="seat" data-seat="1"></div>
+  <div class="seat" data-seat="2"></div>
+  <div class="seat" data-seat="3"></div>
+  <div id="topBtns">
+    <button id="menuBtn" class="icon-btn" aria-label="Game menu"><svg><use href="#i-menu"/></svg></button>
+    <button id="viewBtn" class="icon-btn" aria-label="Reset camera"><svg><use href="#i-view"/></svg></button>
+  </div>
+  <div id="netChip" hidden></div>
+  <button id="roll" disabled aria-label="Roll the die">
+    <span class="face"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="lbl">Roll</span>
+  </button>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- main menu -->
+<section id="scrMenu" class="sheet" hidden aria-label="Main menu">
+  <div class="stack">
+    <button class="choice primary" id="goQuick"><span class="ico"><svg><use href="#i-bot"/></svg></span><span><b>Play vs computer</b><small>You against 1 to 3 bots</small></span><span class="chev">›</span></button>
+    <button class="choice" id="goLocal"><span class="ico"><svg><use href="#i-people"/></svg></span><span><b>Pass and play</b><small>2 to 4 people on this device, bots optional</small></span><span class="chev">›</span></button>
+    <button class="choice" id="goOnline"><span class="ico"><svg><use href="#i-globe"/></svg></span><span><b>Online table</b><small id="onlineHint">Play with people you've shared this page with</small></span><span class="chev">›</span></button>
+    <button class="choice" id="goContinue" hidden><span class="ico"><svg><use href="#i-play"/></svg></span><span><b>Continue game</b><small id="continueHint">Pick up where you left off</small></span><span class="chev">›</span></button>
+  </div>
+  <div class="foot">
+    <button class="link" id="goHelp">How to play</button>
+    <button class="link" id="soundToggle">Sound: on</button>
+  </div>
+</section>
+
+<!-- quick game -->
+<section id="scrQuick" class="sheet" hidden aria-labelledby="quickTitle">
+  <div class="head"><button class="icon-btn back" aria-label="Back"><svg><use href="#i-back"/></svg></button><h2 id="quickTitle">Play vs computer</h2></div>
+  <div class="field"><label>Your colour</label><div class="swatches" id="quickColor"></div></div>
+  <div class="field"><label>Opponents</label><div class="seg" id="quickBots"><button aria-pressed="false" data-n="1">1 bot</button><button aria-pressed="false" data-n="2">2 bots</button><button aria-pressed="true" data-n="3">3 bots</button></div></div>
+  <div class="field"><label for="quickName">Your name</label><input class="input" id="quickName" maxlength="14" autocomplete="nickname" placeholder="You"></div>
+  <button class="btn primary wide" id="quickStart">Start game</button>
+</section>
+
+<!-- pass and play setup -->
+<section id="scrLocal" class="sheet" hidden aria-labelledby="localTitle">
+  <div class="head"><button class="icon-btn back" aria-label="Back"><svg><use href="#i-back"/></svg></button><h2 id="localTitle">Pass and play</h2></div>
+  <p>Seats go clockwise from Red. Hand the device to whoever's card is lit.</p>
+  <div class="stack" id="localSeats"></div>
+  <h3>House rules</h3>
+  <div id="localRules"></div>
+  <p id="localErr" class="note warn" hidden>Choose at least two players.</p>
+  <button class="btn primary wide" id="localStart">Start game</button>
+</section>
+
+<!-- online -->
+<section id="scrOnline" class="sheet" hidden aria-labelledby="onlineTitle">
+  <div class="head"><button class="icon-btn back" aria-label="Back"><svg><use href="#i-back"/></svg></button><h2 id="onlineTitle">Online table</h2></div>
+  <p id="onlineState" class="note">Connecting…</p>
+  <div class="field"><label for="netName">Your name</label><input class="input" id="netName" maxlength="14" autocomplete="nickname" placeholder="Your name"></div>
+  <button class="btn primary wide" id="netInvite" hidden>Join table</button>
+  <button class="btn primary wide" id="netCreate" disabled>Open a new table</button>
+  <div class="field"><label for="netCode">Join with a table code</label>
+    <div class="row"><input class="input code" id="netCode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" style="flex:1"><button class="btn" id="netJoin" disabled>Join</button></div>
+  </div>
+  <button class="btn wide" id="netRejoin" hidden>Rejoin table</button>
+  <button class="btn wide" id="netRetry" hidden>Try again</button>
+  <div id="netTablesWrap" class="stack">
+    <h3>Open tables</h3>
+    <div class="tables" id="netTables"><div class="empty">No open tables yet.</div></div>
+  </div>
+  <p class="note" id="netNote">Online tables reach people you've shared this page with in Claude, while they have it open and are signed in. Share the page from its menu on claude.ai, then send them your table code.</p>
+</section>
+
+<!-- waiting room -->
+<section id="scrTable" class="sheet" hidden aria-labelledby="tableTitle">
+  <div class="head"><h2 id="tableTitle">Your table</h2><button class="btn small" id="tblLeave">Leave</button></div>
+  <div class="codebox"><div><div style="font-size:13px;color:var(--muted)">Table code</div><div class="code" id="tblCode">-----</div></div><button class="btn small" id="tblCopy">Copy code</button><button class="btn small primary" id="tblShare" hidden>Share invite</button></div>
+  <div class="stack" id="tblSeats"></div>
+  <p id="tblHint"></p>
+  <div id="tblRulesWrap"><h3>House rules</h3><div id="tblRules"></div></div>
+  <button class="btn primary wide" id="tblStart" hidden>Start game</button>
+</section>
+
+<!-- pause -->
+<section id="scrPause" class="sheet" hidden aria-labelledby="pauseTitle">
+  <div class="head"><h2 id="pauseTitle">Game menu</h2><button class="btn small" id="pauseClose">Close</button></div>
+  <div class="stack">
+    <button class="btn wide" id="pSound">Sound: on</button>
+    <button class="btn wide" id="pSpeed">Bot speed: normal</button>
+    <button class="btn wide" id="pRules">How to play</button>
+    <button class="btn wide" id="pRestart">Restart this game</button>
+    <button class="btn wide" id="pQuit">Leave game</button>
+  </div>
+  <p id="pauseNote"></p>
+</section>
+
+<!-- game over -->
+<section id="scrOver" class="sheet" hidden aria-labelledby="overTitle">
+  <div class="row" style="gap:14px"><svg class="trophy" aria-hidden="true"><use href="#i-trophy"/></svg><div><h2 id="overTitle">Winner</h2><p id="overSub"></p></div></div>
+  <ol class="standings" id="overList"></ol>
+  <div class="row"><button class="btn primary" id="overAgain" style="flex:1">Play again</button><button class="btn" id="overMenu" style="flex:1">Main menu</button></div>
+  <p id="overNote"></p>
+</section>
+
+<!-- rules -->
+<section id="scrHelp" class="sheet" hidden aria-labelledby="helpTitle">
+  <div class="head"><button class="icon-btn back" aria-label="Back"><svg><use href="#i-back"/></svg></button><h2 id="helpTitle">How to play</h2></div>
+  <ol class="rules">
+    <li>Each player has four pawns in a coloured yard. Get all four round the board and into the centre to finish.</li>
+    <li>Roll a <b>6</b> to bring a pawn out onto your start square. A 6 also earns another roll.</li>
+    <li>Pawns travel clockwise, 51 squares round the track, then up your own coloured column to home. You need the exact number to finish.</li>
+    <li>Land on a lone or stacked rival pawn to send it back to its yard. Capturing earns another roll.</li>
+    <li>Starred squares and every start square are <b>safe</b>: no captures there.</li>
+    <li>Three 6s in a row ends your turn.</li>
+    <li>Tap the die or the Roll button, then tap a glowing pawn or its marker. Drag to turn the board, pinch or scroll to zoom, double-tap to reset.</li>
+  </ol>
+</section>
+
+<div id="fatal" hidden><div><h2 style="font-family:var(--font-display)">3D isn't available here</h2><p id="fatalMsg">This browser couldn't start WebGL, which the board needs. Try another browser or turn on hardware acceleration.</p></div></div>
+
+<script>window.__LUDO_BUILD = { kind: 'web' };
+setTimeout(function () { if (!window.__ludo) { var f = document.getElementById('fatal'); if (f) { f.hidden = false; document.getElementById('fatalMsg').textContent = 'The game could not load. Check your internet connection, then reload the page.'; } } }, 20000);</script>
+<script type="module">
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// site/js/engine.js
+var engine_exports = {};
+__export(engine_exports, {
+  COLOR_KEYS: () => COLOR_KEYS,
+  COLOR_NAMES: () => COLOR_NAMES,
+  DEFAULT_RULES: () => DEFAULT_RULES,
+  FINISH: () => FINISH,
+  HOME_COL: () => HOME_COL,
+  LAST_TRACK: () => LAST_TRACK,
+  SAFE: () => SAFE,
+  STAR: () => STAR,
+  START: () => START,
+  T: () => T,
+  TRACK: () => TRACK,
+  YARD: () => YARD,
+  absIndex: () => absIndex,
+  activeSeats: () => activeSeats,
+  animMs: () => animMs,
+  applyMove: () => applyMove,
+  applyRoll: () => applyRoll,
+  botPick: () => botPick,
+  canExit: () => canExit,
+  cellOf: () => cellOf,
+  cleanName: () => cleanName,
+  clone: () => clone,
+  endGame: () => endGame,
+  isActive: () => isActive,
+  isSafeAbs: () => isSafeAbs,
+  legalMoves: () => legalMoves,
+  makeSeat: () => makeSeat,
+  movesAreEquivalent: () => movesAreEquivalent,
+  newGame: () => newGame,
+  newLobby: () => newLobby,
+  progressSum: () => progressSum,
+  randomId: () => randomId,
+  rollDie: () => rollDie,
+  scoreMove: () => scoreMove,
+  validState: () => validState
+});
+function cellOf(seat, p) {
+  if (p < 0 || p >= FINISH) return null;
+  if (p <= LAST_TRACK) return TRACK[absIndex(seat, p)];
+  return HOME_COL[seat][p - LAST_TRACK - 1];
+}
+function makeSeat(kind, name = "", cid = "") {
+  return { k: kind, n: name, c: cid, w: 0 };
+}
+function newGame({ seats, rules = {}, first = null, gid = randomId(8), ep = 0 }) {
+  const S = {
+    v: 1,
+    gid,
+    ep,
+    sq: 0,
+    ph: "roll",
+    tn: 0,
+    dv: 0,
+    rn: 0,
+    sx: 0,
+    tk: [0, 1, 2, 3].map(() => [YARD, YARD, YARD, YARD]),
+    rk: [],
+    ru: { ...DEFAULT_RULES, ...rules },
+    st: seats.map((s) => ({ k: s.k, n: s.n || "", c: s.c || "", w: s.w ? 1 : 0 })),
+    ev: null,
+    mv: [],
+    tl: 0
+  };
+  const active = activeSeats(S);
+  if (active.length < 2) throw new Error("A game needs at least two players.");
+  S.tn = first != null && active.includes(first) ? first : active[0];
+  return S;
+}
+function newLobby({ seats, rules = {}, gid = randomId(8), ep = 0 }) {
+  return {
+    v: 1,
+    gid,
+    ep,
+    sq: 0,
+    ph: "lobby",
+    tn: 0,
+    dv: 0,
+    rn: 0,
+    sx: 0,
+    tk: [0, 1, 2, 3].map(() => [YARD, YARD, YARD, YARD]),
+    rk: [],
+    ru: { ...DEFAULT_RULES, ...rules },
+    st: seats.map((s) => ({ k: s.k, n: s.n || "", c: s.c || "", w: s.w ? 1 : 0 })),
+    ev: null,
+    mv: [],
+    tl: 0
+  };
+}
+function legalMoves(S, d = S.dv) {
+  const s = S.tn;
+  const out = [];
+  for (let t = 0; t < 4; t++) {
+    const p = S.tk[s][t];
+    if (p === YARD) {
+      if (canExit(S, d)) out.push({ t, from: YARD, to: 0 });
+    } else if (p < FINISH && p + d <= FINISH) {
+      out.push({ t, from: p, to: p + d });
+    }
+  }
+  return out;
+}
+function movesAreEquivalent(moves) {
+  if (moves.length <= 1) return true;
+  return moves.every((m) => m.from === moves[0].from && m.to === moves[0].to);
+}
+function progressSum(S, s) {
+  return S.tk[s].reduce((a, p) => a + (p === YARD ? 0 : p + 1), 0);
+}
+function passTurn(S) {
+  S.sx = 0;
+  S.mv = [];
+  S.ph = "roll";
+  for (let i = 1; i <= 4; i++) {
+    const n = (S.tn + i) % 4;
+    if (isActive(S, n) && !S.rk.includes(n)) {
+      S.tn = n;
+      return;
+    }
+  }
+}
+function checkOver(S) {
+  const remaining = activeSeats(S).filter((s) => !S.rk.includes(s));
+  const anyHuman = activeSeats(S).some((s) => S.st[s].k === "h");
+  const humansLeft = remaining.filter((s) => S.st[s].k === "h");
+  if (remaining.length <= 1 || S.ru.eh && anyHuman && humansLeft.length === 0) {
+    remaining.sort((a, b) => progressSum(S, b) - progressSum(S, a));
+    S.rk.push(...remaining);
+    S.ph = "over";
+    S.mv = [];
+    return true;
+  }
+  return false;
+}
+function applyRoll(S0, value) {
+  if (S0.ph !== "roll") throw new Error("Not time to roll");
+  const S = clone(S0);
+  S.dv = value;
+  S.rn += 1;
+  S.sq += 1;
+  S.ev = null;
+  S.sx = value === 6 ? S.sx + 1 : 0;
+  if (value === 6 && S.sx >= 3 && S.ru.t6) {
+    S.ev = { s: S.sq, k: "t6", a: S.tn };
+    passTurn(S);
+    return S;
+  }
+  const moves = legalMoves(S);
+  if (!moves.length) {
+    S.ev = { s: S.sq, k: "none", a: S.tn };
+    if (value === 6) {
+      S.ph = "roll";
+      S.mv = [];
+    } else {
+      passTurn(S);
+    }
+    return S;
+  }
+  S.ph = "move";
+  S.mv = moves.map((m) => m.t);
+  return S;
+}
+function applyMove(S0, t) {
+  if (S0.ph !== "move" || !S0.mv.includes(t)) throw new Error("Illegal move");
+  const S = clone(S0);
+  const s = S.tn;
+  const d = S.dv;
+  const from = S.tk[s][t];
+  const to = from === YARD ? 0 : from + d;
+  S.tk[s][t] = to;
+  S.sq += 1;
+  S.ev = null;
+  S.mv = [];
+  let bonus = d === 6;
+  const victims = [];
+  if (to <= LAST_TRACK) {
+    const a = absIndex(s, to);
+    if (!SAFE_SET.has(a)) {
+      for (let o = 0; o < 4; o++) {
+        if (o === s) continue;
+        for (let k = 0; k < 4; k++) {
+          const q = S.tk[o][k];
+          if (q >= 0 && q <= LAST_TRACK && absIndex(o, q) === a) {
+            S.tk[o][k] = YARD;
+            if (!victims.includes(o)) victims.push(o);
+          }
+        }
+      }
+    }
+  }
+  if (victims.length) {
+    S.ev = { s: S.sq, k: "cap", a: s, b: victims };
+    if (S.ru.cb) bonus = true;
+  }
+  if (to === FINISH) {
+    if (S.ru.hb) bonus = true;
+    if (S.tk[s].every((p) => p === FINISH)) {
+      S.rk.push(s);
+      S.ev = { s: S.sq, k: "fin", a: s, r: S.rk.length };
+      if (!checkOver(S)) passTurn(S);
+      return S;
+    }
+    S.ev = { s: S.sq, k: "home", a: s };
+  }
+  if (bonus) {
+    S.ph = "roll";
+    if (d !== 6) S.sx = 0;
+  } else {
+    passTurn(S);
+  }
+  return S;
+}
+function endGame(S0) {
+  const S = clone(S0);
+  const remaining = activeSeats(S).filter((s) => !S.rk.includes(s));
+  remaining.sort((a, b) => progressSum(S, b) - progressSum(S, a));
+  S.rk.push(...remaining);
+  S.ph = "over";
+  S.mv = [];
+  S.sq += 1;
+  S.ev = null;
+  return S;
+}
+function threatAt(S, seat, a) {
+  if (SAFE_SET.has(a)) return 0;
+  let n = 0;
+  for (let o = 0; o < 4; o++) {
+    if (o === seat || !isActive(S, o)) continue;
+    for (let k = 0; k < 4; k++) {
+      const q = S.tk[o][k];
+      if (q < 0 || q > LAST_TRACK) continue;
+      const b = absIndex(o, q);
+      const dist = (a - b + 52) % 52;
+      if (dist >= 1 && dist <= 6 && q + dist <= LAST_TRACK) n += dist === 6 ? 0.8 : 1;
+    }
+  }
+  return n;
+}
+function opponentsAt(S, seat, a) {
+  const out = [];
+  for (let o = 0; o < 4; o++) {
+    if (o === seat) continue;
+    for (let k = 0; k < 4; k++) {
+      const q = S.tk[o][k];
+      if (q >= 0 && q <= LAST_TRACK && absIndex(o, q) === a) out.push(q);
+    }
+  }
+  return out;
+}
+function scoreMove(S, m, noise = Math.random) {
+  const s = S.tn;
+  let sc = noise() * 3;
+  if (m.from === YARD) sc += 38;
+  if (m.to === FINISH) sc += 70;
+  else if (m.to > LAST_TRACK) sc += 26 + m.to * 0.2;
+  if (m.to <= LAST_TRACK) {
+    const a = absIndex(s, m.to);
+    if (!SAFE_SET.has(a)) {
+      for (const q of opponentsAt(S, s, a)) sc += 55 + q * 1.1;
+      sc -= threatAt(S, s, a) * (12 + m.to * 0.55);
+    } else {
+      sc += 14;
+    }
+  }
+  if (m.from >= 0 && m.from <= LAST_TRACK) {
+    const a0 = absIndex(s, m.from);
+    sc += threatAt(S, s, a0) * (10 + m.from * 0.5);
+  }
+  sc += (m.to - Math.max(m.from, 0)) * 0.4 + Math.max(m.from, 0) * 0.04;
+  return sc;
+}
+function botPick(S, noise = Math.random) {
+  const moves = legalMoves(S).filter((m) => S.mv.includes(m.t));
+  if (!moves.length) return null;
+  let best = moves[0];
+  let bestScore = -Infinity;
+  for (const m of moves) {
+    const sc = scoreMove(S, m, noise);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = m;
+    }
+  }
+  return best.t;
+}
+function animMs(a, b, speed = 1) {
+  if (!a || !b || a.gid !== b.gid) return 0;
+  let ms = 0;
+  if (b.rn !== a.rn) ms += T.dice;
+  let captured = false;
+  for (let s = 0; s < 4; s++) {
+    for (let t = 0; t < 4; t++) {
+      const f = a.tk[s][t];
+      const to = b.tk[s][t];
+      if (to === f) continue;
+      if (to > f) ms += f === YARD ? T.exit : (to - f) * T.hop + T.moveTail;
+      else if (to === YARD) captured = true;
+    }
+  }
+  if (captured) ms += T.cap;
+  if (b.ev && (!a.ev || b.ev.s !== a.ev.s) && (b.ev.k === "none" || b.ev.k === "t6")) ms += T.eventPause;
+  return ms / speed;
+}
+function randomId(n = 6) {
+  let out = "";
+  const buf = new Uint32Array(n);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(buf);
+  else for (let i = 0; i < n; i++) buf[i] = Math.floor(Math.random() * 2 ** 32);
+  for (let i = 0; i < n; i++) out += ID_CHARS[buf[i] % ID_CHARS.length];
+  return out;
+}
+function rollDie() {
+  const buf = new Uint32Array(1);
+  if (globalThis.crypto?.getRandomValues) {
+    const lim = Math.floor(2 ** 32 / 6) * 6;
+    do
+      globalThis.crypto.getRandomValues(buf);
+    while (buf[0] >= lim);
+    return buf[0] % 6 + 1;
+  }
+  return 1 + Math.floor(Math.random() * 6);
+}
+function cleanName(s, max = 14) {
+  return String(s ?? "").replace(BAD_CHARS, "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function validState(S) {
+  try {
+    if (!S || S.v !== 1 || typeof S.gid !== "string" || S.gid.length > 16) return false;
+    if (!["lobby", "roll", "move", "over"].includes(S.ph)) return false;
+    if (!Number.isInteger(S.sq) || !Number.isInteger(S.ep) || !Number.isInteger(S.rn)) return false;
+    if (!Number.isInteger(S.tn) || S.tn < 0 || S.tn > 3) return false;
+    if (!Number.isInteger(S.dv) || S.dv < 0 || S.dv > 6) return false;
+    if (!Array.isArray(S.tk) || S.tk.length !== 4) return false;
+    for (const row of S.tk) {
+      if (!Array.isArray(row) || row.length !== 4) return false;
+      for (const p of row) if (!Number.isInteger(p) || p < -1 || p > FINISH) return false;
+    }
+    if (!Array.isArray(S.st) || S.st.length !== 4) return false;
+    for (const seat of S.st) {
+      if (!seat || !["h", "b", "x", "o"].includes(seat.k) || typeof seat.n !== "string" || typeof seat.c !== "string") return false;
+      if (seat.n.length > 32 || seat.c.length > 16 || ![0, 1, 2].includes(seat.w)) return false;
+    }
+    if (S.ev != null) {
+      const ev = S.ev;
+      const seatInt = (x) => Number.isInteger(x) && x >= 0 && x <= 3;
+      if (typeof ev !== "object" || typeof ev.k !== "string" || !seatInt(ev.a)) return false;
+      if (ev.b != null && (!Array.isArray(ev.b) || !ev.b.every(seatInt))) return false;
+      if (ev.r != null && !(Number.isInteger(ev.r) && ev.r >= 1 && ev.r <= 4)) return false;
+    }
+    if (!Number.isFinite(S.tl) || S.tl < 0 || !Number.isInteger(S.sx) || S.sx < 0 || S.sx > 3) return false;
+    if (!Array.isArray(S.rk) || S.rk.some((r) => !Number.isInteger(r) || r < 0 || r > 3)) return false;
+    if (!Array.isArray(S.mv) || S.mv.some((t) => !Number.isInteger(t) || t < 0 || t > 3)) return false;
+    if (!S.ru || typeof S.ru !== "object") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+var COLOR_KEYS, COLOR_NAMES, TRACK, HOME_COL, START, STAR, SAFE, SAFE_SET, YARD, LAST_TRACK, FINISH, DEFAULT_RULES, T, absIndex, isSafeAbs, clone, isActive, activeSeats, canExit, ID_CHARS, hex4, BAD_RANGES, BAD_CHARS;
+var init_engine = __esm({
+  "site/js/engine.js"() {
+    COLOR_KEYS = ["red", "green", "yellow", "blue"];
+    COLOR_NAMES = ["Red", "Green", "Yellow", "Blue"];
+    TRACK = [
+      [1, 6],
+      [2, 6],
+      [3, 6],
+      [4, 6],
+      [5, 6],
+      [6, 5],
+      [6, 4],
+      [6, 3],
+      [6, 2],
+      [6, 1],
+      [6, 0],
+      [7, 0],
+      [8, 0],
+      [8, 1],
+      [8, 2],
+      [8, 3],
+      [8, 4],
+      [8, 5],
+      [9, 6],
+      [10, 6],
+      [11, 6],
+      [12, 6],
+      [13, 6],
+      [14, 6],
+      [14, 7],
+      [14, 8],
+      [13, 8],
+      [12, 8],
+      [11, 8],
+      [10, 8],
+      [9, 8],
+      [8, 9],
+      [8, 10],
+      [8, 11],
+      [8, 12],
+      [8, 13],
+      [8, 14],
+      [7, 14],
+      [6, 14],
+      [6, 13],
+      [6, 12],
+      [6, 11],
+      [6, 10],
+      [6, 9],
+      [5, 8],
+      [4, 8],
+      [3, 8],
+      [2, 8],
+      [1, 8],
+      [0, 8],
+      [0, 7],
+      [0, 6]
+    ];
+    HOME_COL = [
+      [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7]],
+      [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5]],
+      [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7]],
+      [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9]]
+    ];
+    START = [0, 13, 26, 39];
+    STAR = [8, 21, 34, 47];
+    SAFE = [...START, ...STAR];
+    SAFE_SET = new Set(SAFE);
+    YARD = -1;
+    LAST_TRACK = 50;
+    FINISH = 56;
+    DEFAULT_RULES = {
+      cb: 1,
+      // capture earns another roll
+      hb: 1,
+      // bringing a pawn home earns another roll
+      t6: 1,
+      // three 6s in a row ends the turn
+      e1: 0,
+      // a 1 can also bring a pawn out of the yard
+      eh: 1,
+      // stop the game once every human player has finished
+      am: 1
+      // auto-move when only one choice makes sense
+    };
+    T = {
+      dice: 950,
+      hop: 165,
+      exit: 480,
+      moveTail: 120,
+      cap: 720,
+      eventPause: 700,
+      think: 520,
+      autoMove: 260
+    };
+    absIndex = (seat, p) => (START[seat] + p) % 52;
+    isSafeAbs = (a) => SAFE_SET.has(a);
+    clone = (o) => JSON.parse(JSON.stringify(o));
+    isActive = (S, s) => S.st[s] && (S.st[s].k === "h" || S.st[s].k === "b");
+    activeSeats = (S) => [0, 1, 2, 3].filter((s) => isActive(S, s));
+    canExit = (S, d) => d === 6 || S.ru.e1 === 1 && d === 1;
+    ID_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
+    hex4 = (c) => "\\u" + c.toString(16).padStart(4, "0");
+    BAD_RANGES = [[0, 31], [127, 159], [173, 173], [8203, 8207], [8232, 8238], [8288, 8303], [57344, 63743], [65279, 65279], [65520, 65535]];
+    BAD_CHARS = new RegExp("[" + BAD_RANGES.map(([a, b]) => a === b ? hex4(a) : hex4(a) + "-" + hex4(b)).join("") + "]", "g");
+  }
+});
+
+// site/js/scene.js
+var scene_exports = {};
+__export(scene_exports, {
+  LACQUER: () => LACQUER,
+  LudoScene: () => LudoScene,
+  PRINT: () => PRINT,
+  basePos: () => basePos
+});
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js";
+function basePos(s, t, p) {
+  if (p === YARD) return [YARD_C[s][0] + YARD_OFF[t][0], YARD_C[s][1] + YARD_OFF[t][1]];
+  if (p === FINISH) {
+    const [dx, dz] = DIRS[s];
+    const [a, b] = FIN_AB[t];
+    return [dx * a - dz * b, dz * a + dx * b];
+  }
+  const c = cellOf(s, p);
+  return cellXZ(c[0], c[1]);
+}
+function canvas(w, h = w) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  return [c, c.getContext("2d")];
+}
+function starPath(g, x, y, R, r, n = 5, rot = -Math.PI / 2) {
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + i * Math.PI / n;
+    const rr = i % 2 ? r : R;
+    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  g.closePath();
+}
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+function boardTexture(size) {
+  const [cv, g] = canvas(size);
+  const C = size / 15;
+  g.fillStyle = "#f6efe1";
+  g.fillRect(0, 0, size, size);
+  const cell = (c, r) => [c * C, r * C, C, C];
+  for (const [c, r] of TRACK) {
+    g.fillStyle = "#fffaf1";
+    g.fillRect(...cell(c, r));
+  }
+  for (let s = 0; s < 4; s++) {
+    g.fillStyle = PRINT[s];
+    for (const [c2, r2] of HOME_COL[s]) g.fillRect(...cell(c2, r2));
+    const [c, r] = TRACK[START[s]];
+    g.fillRect(...cell(c, r));
+  }
+  g.strokeStyle = "rgba(70, 55, 40, 0.32)";
+  g.lineWidth = Math.max(2, C * 0.028);
+  for (const [c, r] of [...TRACK, ...HOME_COL.flat()]) g.strokeRect(...cell(c, r));
+  for (const i of STAR) {
+    const [c, r] = TRACK[i];
+    starPath(g, (c + 0.5) * C, (r + 0.52) * C, C * 0.34, C * 0.145);
+    g.fillStyle = "#efe6d3";
+    g.fill();
+    g.lineWidth = C * 0.045;
+    g.strokeStyle = "#8f8473";
+    g.stroke();
+  }
+  for (let s = 0; s < 4; s++) {
+    const [c, r] = TRACK[START[s]];
+    starPath(g, (c + 0.5) * C, (r + 0.52) * C, C * 0.34, C * 0.145);
+    g.fillStyle = "rgba(255, 252, 245, 0.95)";
+    g.fill();
+  }
+  for (let s = 0; s < 4; s++) {
+    const [c, r] = TRACK[(START[s] + LAST_TRACK) % 52];
+    const [hc, hr] = HOME_COL[s][0];
+    const ang = Math.atan2(hr - r, hc - c);
+    g.save();
+    g.translate((c + 0.5) * C, (r + 0.5) * C);
+    g.rotate(ang);
+    g.fillStyle = PRINT[s];
+    g.beginPath();
+    g.moveTo(C * 0.36, 0);
+    g.lineTo(-C * 0.06, -C * 0.3);
+    g.lineTo(-C * 0.06, -C * 0.12);
+    g.lineTo(-C * 0.36, -C * 0.12);
+    g.lineTo(-C * 0.36, C * 0.12);
+    g.lineTo(-C * 0.06, C * 0.12);
+    g.lineTo(-C * 0.06, C * 0.3);
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+  for (let s = 0; s < 4; s++) {
+    const ox = s === 1 || s === 2 ? 9 : 0;
+    const oy = s === 2 || s === 3 ? 9 : 0;
+    g.fillStyle = PRINT[s];
+    g.fillRect(ox * C, oy * C, 6 * C, 6 * C);
+    g.fillStyle = "rgba(255, 248, 235, 0.35)";
+    for (let i = 0; i < 12; i++) {
+      const p = (i + 0.5) * 0.5;
+      for (const [x, y] of [[p, 0.4], [p, 5.6], [0.4, p], [5.6, p]]) {
+        g.beginPath();
+        g.arc((ox + x) * C, (oy + y) * C, C * 0.06, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = "#fbf5e8";
+    roundRect(g, (ox + 0.85) * C, (oy + 0.85) * C, 4.3 * C, 4.3 * C, 0.55 * C);
+    g.fill();
+    for (let t = 0; t < 4; t++) {
+      const cx = (ox + 3 + YARD_OFF[t][0]) * C;
+      const cy = (oy + 3 + YARD_OFF[t][1]) * C;
+      g.fillStyle = PRINT[s];
+      g.beginPath();
+      g.arc(cx, cy, C * 0.64, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "rgba(255, 250, 240, 0.7)";
+      g.lineWidth = C * 0.05;
+      g.beginPath();
+      g.arc(cx, cy, C * 0.5, 0, Math.PI * 2);
+      g.stroke();
+      const grd = g.createRadialGradient(cx, cy - C * 0.15, C * 0.1, cx, cy, C * 0.64);
+      grd.addColorStop(0, "rgba(0,0,0,0)");
+      grd.addColorStop(1, "rgba(0,0,0,0.18)");
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(cx, cy, C * 0.64, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const a = 6 * C;
+  const b = 9 * C;
+  const m = 7.5 * C;
+  const tri = (pts, col) => {
+    g.fillStyle = col;
+    g.beginPath();
+    pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+    g.closePath();
+    g.fill();
+  };
+  tri([[a, a], [a, b], [m, m]], PRINT[0]);
+  tri([[a, a], [b, a], [m, m]], PRINT[1]);
+  tri([[b, a], [b, b], [m, m]], PRINT[2]);
+  tri([[a, b], [b, b], [m, m]], PRINT[3]);
+  g.strokeStyle = "rgba(255, 248, 235, 0.55)";
+  g.lineWidth = C * 0.03;
+  g.beginPath();
+  g.moveTo(a, a);
+  g.lineTo(b, b);
+  g.moveTo(b, a);
+  g.lineTo(a, b);
+  g.stroke();
+  g.save();
+  g.translate(m, m);
+  for (let i = 0; i < 8; i++) {
+    g.rotate(Math.PI / 4);
+    g.fillStyle = i % 2 ? "#f2a33a" : "#f7c25e";
+    g.beginPath();
+    g.ellipse(C * 0.16, 0, C * 0.15, C * 0.07, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = "#b8551f";
+  g.beginPath();
+  g.arc(0, 0, C * 0.08, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+  g.strokeStyle = "rgba(50, 35, 25, 0.55)";
+  g.lineWidth = C * 0.06;
+  g.strokeRect(0, 0, size, size);
+  for (let i = 0; i < 9e3; i++) {
+    g.fillStyle = Math.random() < 0.5 ? "rgba(80,60,30,0.035)" : "rgba(255,255,255,0.05)";
+    g.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+  }
+  return cv;
+}
+function clothTexture() {
+  const S = 256;
+  const [cv, g] = canvas(S);
+  g.fillStyle = "#151d45";
+  g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 2500; i++) {
+    g.fillStyle = Math.random() < 0.5 ? "rgba(0,0,0,0.12)" : "rgba(120,140,220,0.05)";
+    g.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5);
+  }
+  const flower = (x, y, k) => {
+    g.save();
+    g.translate(x, y);
+    for (let i = 0; i < 8; i++) {
+      g.rotate(Math.PI / 4);
+      g.fillStyle = "rgba(92, 112, 196, 0.17)";
+      g.beginPath();
+      g.ellipse(18 * k, 0, 15 * k, 6 * k, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = "rgba(242, 163, 58, 0.2)";
+    g.beginPath();
+    g.arc(0, 0, 6 * k, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  };
+  flower(64, 64, 1);
+  flower(192, 192, 1);
+  for (const [x, y] of [[192, 64], [64, 192]]) {
+    g.fillStyle = "rgba(92, 112, 196, 0.18)";
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2;
+      g.beginPath();
+      g.arc(x + Math.cos(a) * 10, y + Math.sin(a) * 10, 4, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(30, 30);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function woodTexture() {
+  const [cv, g] = canvas(512);
+  const grd = g.createLinearGradient(0, 0, 512, 0);
+  grd.addColorStop(0, "#6a2f1b");
+  grd.addColorStop(0.5, "#7d3c22");
+  grd.addColorStop(1, "#6a2f1b");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 90; i++) {
+    const y0 = Math.random() * 512;
+    const amp = rand(2, 9);
+    const f = rand(6e-3, 0.02);
+    g.strokeStyle = `rgba(${Math.random() < 0.7 ? "40,16,8" : "150,80,45"},${rand(0.08, 0.28)})`;
+    g.lineWidth = rand(0.6, 3);
+    g.beginPath();
+    for (let x = 0; x <= 512; x += 8) g.lineTo(x, y0 + Math.sin(x * f + i) * amp);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function faceTexture(n) {
+  const [cv, g] = canvas(256);
+  g.fillStyle = "#f6f0e2";
+  g.fillRect(0, 0, 256, 256);
+  const L = 0.27;
+  const H = 0.73;
+  const pips = {
+    1: [[0.5, 0.5]],
+    2: [[L, L], [H, H]],
+    3: [[L, L], [0.5, 0.5], [H, H]],
+    4: [[L, L], [H, L], [L, H], [H, H]],
+    5: [[L, L], [H, L], [L, H], [H, H], [0.5, 0.5]],
+    6: [[L, 0.25], [L, 0.5], [L, 0.75], [H, 0.25], [H, 0.5], [H, 0.75]]
+  }[n];
+  const R = n === 1 ? 36 : 22;
+  for (const [x, y] of pips) {
+    const gx = x * 256;
+    const gy = y * 256;
+    const grd = g.createRadialGradient(gx + R * 0.25, gy + R * 0.3, R * 0.1, gx, gy, R);
+    grd.addColorStop(0, n === 1 ? "#e8474c" : "#3d4677");
+    grd.addColorStop(1, n === 1 ? "#a61c22" : "#151a38");
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(gx, gy, R, 0, Math.PI * 2);
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+function roundedBox(seg = 20, r = 0.16) {
+  const geo = new THREE.BoxGeometry(1, 1, 1, seg, seg, seg);
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const v = new THREE.Vector3();
+  const inner = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const h = 0.5 - r;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    inner.set(clamp(v.x, -h, h), clamp(v.y, -h, h), clamp(v.z, -h, h));
+    n.subVectors(v, inner);
+    if (n.lengthSq() < 1e-12) n.fromBufferAttribute(nor, i);
+    else n.normalize();
+    v.copy(inner).addScaledVector(n, r);
+    pos.setXYZ(i, v.x, v.y, v.z);
+    nor.setXYZ(i, n.x, n.y, n.z);
+  }
+  pos.needsUpdate = true;
+  nor.needsUpdate = true;
+  return geo;
+}
+function pawnGeometry(seat) {
+  const P = [
+    [0, 0],
+    [0.34, 0],
+    [0.372, 0.016],
+    [0.385, 0.05],
+    [0.378, 0.085],
+    [0.35, 0.104],
+    [0.318, 0.116],
+    [0.332, 0.138],
+    [0.312, 0.162],
+    [0.272, 0.19],
+    [0.228, 0.243],
+    [0.192, 0.31],
+    [0.167, 0.38],
+    [0.152, 0.45],
+    [0.146, 0.51],
+    [0.172, 0.53],
+    [0.205, 0.549],
+    [0.216, 0.575],
+    [0.201, 0.6],
+    [0.165, 0.616],
+    [0.122, 0.63],
+    [0.104, 0.652]
+  ];
+  for (let i = 0; i <= 12; i++) {
+    const a = -Math.PI / 3 + i / 12 * (Math.PI / 2 + Math.PI / 3);
+    P.push([Math.max(0, 0.168 * Math.cos(a)), 0.8 + 0.168 * Math.sin(a)]);
+  }
+  const geo = new THREE.LatheGeometry(P.map(([x, y]) => new THREE.Vector2(x, y)), 40);
+  const base = new THREE.Color(LACQUER[seat]);
+  const dark = base.clone().multiplyScalar(0.5);
+  const gold = new THREE.Color("#e2b14c");
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const c = y > 0.112 && y < 0.168 ? dark : y > 0.524 && y < 0.622 ? gold : base;
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+var PRINT, LACQUER, MARIGOLD, TABLE_Y, DIE, FRAME_HALF, UP, YARD_C, YARD_OFF, DIRS, FIN_AB, STACK, FACE_VAL, VAL_N, cellXZ, clamp, lerp, easeOutCubic, easeInOut, rand, Confetti, LudoScene;
+var init_scene = __esm({
+  "site/js/scene.js"() {
+    init_engine();
+    PRINT = ["#d8383d", "#279a55", "#eab21f", "#2a69d1"];
+    LACQUER = ["#e5383b", "#22a75b", "#f6c22a", "#2e6fe4"];
+    MARIGOLD = "#f2a33a";
+    TABLE_Y = -0.6;
+    DIE = 1.3;
+    FRAME_HALF = 8.35;
+    UP = new THREE.Vector3(0, 1, 0);
+    YARD_C = [[-4.5, -4.5], [4.5, -4.5], [4.5, 4.5], [-4.5, 4.5]];
+    YARD_OFF = [[-1.05, -1.05], [1.05, -1.05], [-1.05, 1.05], [1.05, 1.05]];
+    DIRS = [[-1, 0], [0, -1], [1, 0], [0, 1]];
+    FIN_AB = [[1.12, -0.6], [1.12, 0], [1.12, 0.6], [0.55, 0]];
+    STACK = {
+      2: [[-0.2, -0.2], [0.2, 0.2]],
+      3: [[-0.22, -0.17], [0.22, -0.17], [0, 0.23]],
+      4: [[-0.21, -0.21], [0.21, -0.21], [-0.21, 0.21], [0.21, 0.21]]
+    };
+    FACE_VAL = [2, 5, 1, 6, 3, 4];
+    VAL_N = {
+      1: new THREE.Vector3(0, 1, 0),
+      6: new THREE.Vector3(0, -1, 0),
+      2: new THREE.Vector3(1, 0, 0),
+      5: new THREE.Vector3(-1, 0, 0),
+      3: new THREE.Vector3(0, 0, 1),
+      4: new THREE.Vector3(0, 0, -1)
+    };
+    cellXZ = (c, r) => [c - 7, r - 7];
+    clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    lerp = (a, b, t) => a + (b - a) * t;
+    easeOutCubic = (u) => 1 - (1 - u) ** 3;
+    easeInOut = (u) => u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    rand = (a, b) => a + Math.random() * (b - a);
+    Confetti = class {
+      constructor(scene2, n = 220) {
+        this.n = n;
+        const geo = new THREE.PlaneGeometry(0.2, 0.11);
+        const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false });
+        this.mesh = new THREE.InstancedMesh(geo, mat, n);
+        this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.frustumCulled = false;
+        this.parts = [];
+        const m = new THREE.Matrix4().makeScale(0, 0, 0);
+        const c = new THREE.Color();
+        for (let i = 0; i < n; i++) {
+          this.parts.push({ on: false, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), life: 0 });
+          this.mesh.setMatrixAt(i, m);
+          this.mesh.setColorAt(i, c.set("#ffffff"));
+        }
+        this.next = 0;
+        this.active = 0;
+        scene2.add(this.mesh);
+        this.tmpM = new THREE.Matrix4();
+        this.tmpQ = new THREE.Quaternion();
+        this.tmpS = new THREE.Vector3(1, 1, 1);
+      }
+      burst(origin, colors, count = 60, power = 1) {
+        const c = new THREE.Color();
+        for (let k = 0; k < count; k++) {
+          const i = this.next;
+          this.next = (this.next + 1) % this.n;
+          const q = this.parts[i];
+          q.on = true;
+          q.life = rand(2.2, 3.4);
+          q.p.set(origin.x + rand(-0.3, 0.3), origin.y + rand(0, 0.4), origin.z + rand(-0.3, 0.3));
+          const a = rand(0, Math.PI * 2);
+          const sp = rand(1.5, 4.5) * power;
+          q.v.set(Math.cos(a) * sp, rand(4, 8) * power, Math.sin(a) * sp);
+          q.r.set(rand(0, 6), rand(0, 6), rand(0, 6));
+          q.w.set(rand(-9, 9), rand(-9, 9), rand(-9, 9));
+          this.mesh.setColorAt(i, c.set(colors[k % colors.length]));
+        }
+        this.mesh.instanceColor.needsUpdate = true;
+        this.active = 4;
+      }
+      update(dt) {
+        if (this.active <= 0) return;
+        this.active -= dt;
+        let any = false;
+        for (let i = 0; i < this.n; i++) {
+          const q = this.parts[i];
+          if (!q.on) continue;
+          any = true;
+          q.life -= dt;
+          const floor = Math.abs(q.p.x) < FRAME_HALF && Math.abs(q.p.z) < FRAME_HALF ? 0.03 : TABLE_Y + 0.03;
+          if (q.p.y > floor) {
+            q.v.y -= 7.5 * dt;
+            q.v.multiplyScalar(Math.exp(-1.6 * dt));
+            q.p.addScaledVector(q.v, dt);
+            q.r.x += q.w.x * dt;
+            q.r.y += q.w.y * dt;
+            q.r.z += q.w.z * dt;
+          } else {
+            q.p.y = floor;
+            q.r.x = -Math.PI / 2;
+            q.r.z = 0;
+          }
+          const s = q.life < 0.5 ? Math.max(0, q.life / 0.5) : 1;
+          if (q.life <= 0) q.on = false;
+          this.tmpQ.setFromEuler(q.r);
+          this.tmpS.setScalar(q.on ? s : 0);
+          this.tmpM.compose(q.p, this.tmpQ, this.tmpS);
+          this.mesh.setMatrixAt(i, this.tmpM);
+        }
+        this.mesh.instanceMatrix.needsUpdate = true;
+        if (any) this.active = Math.max(this.active, 0.1);
+      }
+    };
+    LudoScene = class {
+      constructor(canvasEl, opts = {}) {
+        this.canvas = canvasEl;
+        this.sfx = opts.sfx || (() => {
+        });
+        this.onTap = opts.onTap || (() => {
+        });
+        this.onDisplay = opts.onDisplay || (() => {
+        });
+        this.onEvent = opts.onEvent || (() => {
+        });
+        this.speed = 1;
+        this.reduceMotion = !!opts.reduceMotion;
+        this.D = null;
+        this.queue = [];
+        this.busy = false;
+        this.tweens = /* @__PURE__ */ new Set();
+        this.insets = { top: 0, bottom: 0, left: 0, right: 0 };
+        this.viewAz = 0;
+        this.portrait = true;
+        this.menuMode = false;
+        this.time = 0;
+        this.highlights = [];
+        this.dieInvite = false;
+        this.spinning = false;
+        this.shake = 0;
+        const r = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, powerPreference: "high-performance" });
+        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        r.shadowMap.enabled = true;
+        r.shadowMap.type = THREE.PCFSoftShadowMap;
+        r.toneMapping = THREE.ACESFilmicToneMapping;
+        r.toneMappingExposure = 1.02;
+        this.renderer = r;
+        const scene2 = new THREE.Scene();
+        scene2.background = new THREE.Color("#0c122e");
+        scene2.fog = new THREE.Fog("#0c122e", 34, 80);
+        this.scene = scene2;
+        this.camera = new THREE.PerspectiveCamera(30, 1, 0.5, 220);
+        this.cam = { az: 0, pol: 0.6, r: 40, zoom: 1 };
+        this.goal = { az: 0, pol: 0.6, zoom: 1 };
+        this.fitR = 40;
+        this.target = new THREE.Vector3();
+        this.goalTarget = new THREE.Vector3();
+        this.lens = { x: 0, y: 0 };
+        this.lensGoal = { x: 0, y: 0 };
+        this.buildEnvironment();
+        this.buildLights();
+        this.buildTable();
+        this.buildBoard();
+        this.buildTokens();
+        this.buildMarkers();
+        this.buildDie();
+        this.confetti = new Confetti(scene2);
+        this.raycaster = new THREE.Raycaster();
+        this.bindInput();
+        this.resize();
+        this.ro = new ResizeObserver(() => this.resize());
+        this.ro.observe(canvasEl);
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) this.flushTweens();
+        });
+        this.last = performance.now();
+        this.dirty = true;
+        this.frame = 0;
+        const every = Math.max(1, (window.__LUDO_TEST || {}).renderEvery || 1);
+        const loop = (t) => {
+          this.raf = requestAnimationFrame(loop);
+          const dt = Math.min(0.05, (t - this.last) / 1e3);
+          this.last = t;
+          const moving = this.update(dt, t);
+          if ((moving || this.dirty) && ++this.frame % every === 0) {
+            this.renderer.render(this.scene, this.camera);
+            this.dirty = false;
+          }
+        };
+        this.raf = requestAnimationFrame(loop);
+      }
+      // ---- build ------------------------------------------------------------------
+      buildEnvironment() {
+        const pmrem = new THREE.PMREMGenerator(this.renderer);
+        const env = new THREE.Scene();
+        const box = new THREE.Mesh(new THREE.BoxGeometry(24, 14, 24), new THREE.MeshBasicMaterial({ color: "#3a4268", side: THREE.BackSide }));
+        env.add(box);
+        const panel = (w, h, color, k, pos, rot) => {
+          const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+          m.material.color.multiplyScalar(k);
+          m.position.set(...pos);
+          m.rotation.set(...rot);
+          env.add(m);
+        };
+        panel(10, 10, "#fff3e0", 3.2, [0, 6.8, 0], [Math.PI / 2, 0, 0]);
+        panel(8, 4, "#ffd9a8", 1.8, [-11.8, 3, 0], [0, Math.PI / 2, 0]);
+        panel(8, 4, "#b9c7ff", 1.3, [11.8, 3, 0], [0, -Math.PI / 2, 0]);
+        panel(10, 3, "#ffffff", 1.1, [0, 3, -11.8], [0, 0, 0]);
+        this.scene.environment = pmrem.fromScene(env, 0.035).texture;
+        this.scene.environmentIntensity = 0.75;
+        pmrem.dispose();
+      }
+      buildLights() {
+        this.scene.add(new THREE.HemisphereLight("#fff4e4", "#1a2250", 0.6));
+        const sun = new THREE.DirectionalLight("#fff0db", 2.35);
+        sun.position.set(6, 17, 9);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        const sc = sun.shadow.camera;
+        sc.left = -15;
+        sc.right = 15;
+        sc.top = 15;
+        sc.bottom = -15;
+        sc.near = 2;
+        sc.far = 45;
+        sun.shadow.bias = -4e-4;
+        sun.shadow.normalBias = 0.025;
+        sun.shadow.radius = 3;
+        this.scene.add(sun);
+        const rim = new THREE.DirectionalLight("#9fb2ff", 0.45);
+        rim.position.set(-9, 6, -8);
+        this.scene.add(rim);
+      }
+      buildTable() {
+        const cloth = new THREE.Mesh(
+          new THREE.PlaneGeometry(140, 140),
+          new THREE.MeshStandardMaterial({ map: clothTexture(), roughness: 0.96, metalness: 0 })
+        );
+        cloth.rotation.x = -Math.PI / 2;
+        cloth.position.y = TABLE_Y;
+        cloth.receiveShadow = true;
+        this.scene.add(cloth);
+      }
+      buildBoard() {
+        const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
+        const size = Math.min(2048, this.renderer.capabilities.maxTextureSize);
+        const tex = new THREE.CanvasTexture(boardTexture(size));
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = Math.min(8, maxAniso);
+        const surface = new THREE.Mesh(
+          new THREE.PlaneGeometry(15, 15),
+          new THREE.MeshStandardMaterial({ map: tex, roughness: 0.62, metalness: 0 })
+        );
+        surface.rotation.x = -Math.PI / 2;
+        surface.receiveShadow = true;
+        this.scene.add(surface);
+        const wood = woodTexture();
+        wood.repeat.set(0.07, 0.07);
+        const woodMat = new THREE.MeshPhysicalMaterial({ map: wood, roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.22 });
+        const outer = new THREE.Shape();
+        const R = 0.6;
+        const H = FRAME_HALF;
+        outer.moveTo(-H + R, -H);
+        outer.lineTo(H - R, -H);
+        outer.quadraticCurveTo(H, -H, H, -H + R);
+        outer.lineTo(H, H - R);
+        outer.quadraticCurveTo(H, H, H - R, H);
+        outer.lineTo(-H + R, H);
+        outer.quadraticCurveTo(-H, H, -H, H - R);
+        outer.lineTo(-H, -H + R);
+        outer.quadraticCurveTo(-H, -H, -H + R, -H);
+        const hole = new THREE.Path();
+        const h = 7.56;
+        hole.moveTo(-h, -h);
+        hole.lineTo(-h, h);
+        hole.lineTo(h, h);
+        hole.lineTo(h, -h);
+        hole.lineTo(-h, -h);
+        outer.holes.push(hole);
+        const frameGeo = new THREE.ExtrudeGeometry(outer, {
+          depth: 0.56,
+          bevelEnabled: true,
+          bevelThickness: 0.06,
+          bevelSize: 0.06,
+          bevelSegments: 3,
+          curveSegments: 10
+        });
+        frameGeo.rotateX(-Math.PI / 2);
+        const frame = new THREE.Mesh(frameGeo, woodMat);
+        frame.position.y = TABLE_Y + 0.06;
+        frame.castShadow = true;
+        frame.receiveShadow = true;
+        this.scene.add(frame);
+        const under = new THREE.Mesh(new THREE.BoxGeometry(15.2, 0.58, 15.2), new THREE.MeshStandardMaterial({ color: "#3b1d10", roughness: 0.8 }));
+        under.position.y = TABLE_Y + 0.29 - 0.01;
+        this.scene.add(under);
+      }
+      buildTokens() {
+        this.tokens = [];
+        this.hitGeo = new THREE.CylinderGeometry(0.52, 0.52, 1.15, 12);
+        this.hitMat = new THREE.MeshBasicMaterial({ visible: false });
+        const ringGeo = new THREE.RingGeometry(0.43, 0.56, 48);
+        ringGeo.rotateX(-Math.PI / 2);
+        for (let s = 0; s < 4; s++) {
+          const geo = pawnGeometry(s);
+          const mat = new THREE.MeshPhysicalMaterial({
+            vertexColors: true,
+            roughness: 0.3,
+            metalness: 0,
+            clearcoat: 1,
+            clearcoatRoughness: 0.1
+          });
+          const row = [];
+          for (let t = 0; t < 4; t++) {
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const hit = new THREE.Mesh(this.hitGeo, this.hitMat);
+            hit.position.y = 0.55;
+            hit.userData.pick = { type: "token", s, t };
+            mesh.add(hit);
+            const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: MARIGOLD, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
+            ring.renderOrder = 2;
+            ring.visible = false;
+            this.scene.add(mesh, ring);
+            const [x, z] = basePos(s, t, YARD);
+            const tok = {
+              s,
+              t,
+              mesh,
+              hit,
+              ring,
+              pos: new THREE.Vector3(x, 0, z),
+              target: new THREE.Vector3(x, 0, z),
+              scale: 1,
+              targetScale: 1,
+              animating: false,
+              hl: false,
+              phase: Math.random() * 6
+            };
+            row.push(tok);
+          }
+          this.tokens.push(row);
+        }
+      }
+      buildMarkers() {
+        this.markers = [];
+        const disc = new THREE.CircleGeometry(0.34, 32);
+        disc.rotateX(-Math.PI / 2);
+        const ring = new THREE.RingGeometry(0.34, 0.42, 40);
+        ring.rotateX(-Math.PI / 2);
+        for (let i = 0; i < 4; i++) {
+          const g = new THREE.Group();
+          const d = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ color: MARIGOLD, transparent: true, opacity: 0.32, depthWrite: false, toneMapped: false }));
+          const r = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: MARIGOLD, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+          d.renderOrder = r.renderOrder = 2;
+          const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.4, 12), this.hitMat);
+          g.add(d, r, hit);
+          g.visible = false;
+          g.position.y = 0.012;
+          this.scene.add(g);
+          this.markers.push({ g, hit });
+        }
+      }
+      buildDie() {
+        const mats = FACE_VAL.map((v) => new THREE.MeshPhysicalMaterial({ map: faceTexture(v), roughness: 0.36, clearcoat: 0.45, clearcoatRoughness: 0.3 }));
+        this.die = new THREE.Mesh(roundedBox(20, 0.16), mats);
+        this.die.scale.setScalar(DIE);
+        this.die.castShadow = true;
+        this.die.position.set(0, TABLE_Y + DIE / 2, 11);
+        const hit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 2.2), this.hitMat);
+        hit.userData.pick = { type: "die" };
+        this.die.add(hit);
+        this.dieHit = hit;
+        this.scene.add(this.die);
+        const ringGeo = new THREE.RingGeometry(1, 1.18, 48);
+        ringGeo.rotateX(-Math.PI / 2);
+        this.dieRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: MARIGOLD, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+        this.dieRing.visible = false;
+        this.dieRing.renderOrder = 2;
+        this.scene.add(this.dieRing);
+        this.dieSeat = 3;
+        this.spinAxis = new THREE.Vector3(1, 0.4, 0.2).normalize();
+      }
+      // ---- camera -------------------------------------------------------------------
+      setInsets(ins) {
+        this.insets = { ...this.insets, ...ins };
+        this.fit();
+      }
+      setViewSeat(seat) {
+        const az = [-Math.PI / 2, Math.PI, Math.PI / 2, 0][seat ?? 3];
+        this.viewAz = az;
+        const cur = this.goal.az;
+        const k = Math.round((cur - az) / (Math.PI * 2));
+        this.goal.az = az + k * Math.PI * 2;
+        this.fit();
+        if (this.D) this.placeDie(this.D.tn, true);
+      }
+      resetView() {
+        const k = Math.round((this.goal.az - this.viewAz) / (Math.PI * 2));
+        this.goal.az = this.viewAz + k * Math.PI * 2;
+        this.goal.pol = this.defaultPol();
+        this.goal.zoom = 1;
+      }
+      defaultPol() {
+        return this.portrait ? 0.42 : 0.6;
+      }
+      setMenuMode(on) {
+        this.menuMode = on;
+        this.userMoved = false;
+        if (!on) this.resetView();
+      }
+      // screen-relative helpers for the current view direction
+      axes(az = this.viewAz) {
+        return { right: [Math.cos(az), -Math.sin(az)], down: [Math.sin(az), Math.cos(az)] };
+      }
+      // corner of the screen where a seat's yard appears: 'tl' | 'tr' | 'bl' | 'br'
+      seatCorner(seat) {
+        const { right, down } = this.axes();
+        const [x, z] = YARD_C[seat];
+        const u = x * right[0] + z * right[1];
+        const v = x * down[0] + z * down[1];
+        return (v < 0 ? "t" : "b") + (u < 0 ? "l" : "r");
+      }
+      dieZone(seat) {
+        const { right, down } = this.axes();
+        const [x, z] = YARD_C[seat];
+        const u = x * right[0] + z * right[1];
+        const v = x * down[0] + z * down[1];
+        const out = FRAME_HALF + 0.55 + DIE * 0.8;
+        const su = this.portrait ? u : Math.sign(u) * out;
+        const sv = this.portrait ? Math.sign(v) * out : v;
+        return [right[0] * su + down[0] * sv, right[1] * su + down[1] * sv];
+      }
+      fitPoints() {
+        const pts = [];
+        const H = FRAME_HALF + 0.1;
+        for (const [x, z] of [[-H, -H], [H, -H], [H, H], [-H, H]]) pts.push(new THREE.Vector3(x, 0.1, z));
+        for (const [x, z] of [[-6.6, -6.6], [6.6, -6.6], [6.6, 6.6], [-6.6, 6.6]]) pts.push(new THREE.Vector3(x, 1.05, z));
+        for (let s = 0; s < 4; s++) {
+          const [x, z] = this.dieZone(s);
+          for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            pts.push(new THREE.Vector3(x + dx * DIE * 0.75, TABLE_Y + DIE * 1.1, z + dz * DIE * 0.75));
+          }
+        }
+        return pts;
+      }
+      placeCamera(cam, az, pol, r, target) {
+        cam.position.set(target.x + r * Math.sin(pol) * Math.sin(az), target.y + r * Math.cos(pol), target.z + r * Math.sin(pol) * Math.cos(az));
+        cam.up.set(0, 1, 0);
+        cam.lookAt(target);
+        cam.updateMatrixWorld(true);
+      }
+      // Fit board, pawns and dice spots into the free part of the screen (between HUD cards),
+      // then slide the image with a lens shift so the camera still orbits the board centre.
+      fit() {
+        const w = this.width || 1;
+        const h = this.height || 1;
+        const ins = this.insets;
+        const xMin = -1 + 2 * ins.left / w;
+        const xMax = 1 - 2 * ins.right / w;
+        const yMin = -1 + 2 * ins.bottom / h;
+        const yMax = 1 - 2 * ins.top / h;
+        const W2 = Math.max(0.2, xMax - xMin);
+        const H2 = Math.max(0.2, yMax - yMin);
+        const cam = this.camera.clone();
+        cam.clearViewOffset();
+        cam.aspect = w / h;
+        cam.updateProjectionMatrix();
+        const pts = this.fitPoints();
+        const pol = this.defaultPol();
+        const az = this.viewAz;
+        const target = new THREE.Vector3();
+        const v = new THREE.Vector3();
+        const box = (r) => {
+          this.placeCamera(cam, az, pol, r, target);
+          let x0 = Infinity;
+          let x1 = -Infinity;
+          let y0 = Infinity;
+          let y1 = -Infinity;
+          for (const p of pts) {
+            v.copy(p).project(cam);
+            if (v.z > 1) return null;
+            x0 = Math.min(x0, v.x);
+            x1 = Math.max(x1, v.x);
+            y0 = Math.min(y0, v.y);
+            y1 = Math.max(y1, v.y);
+          }
+          return { x0, x1, y0, y1 };
+        };
+        let lo = 4;
+        let hi = 300;
+        for (let i = 0; i < 32; i++) {
+          const mid = (lo + hi) / 2;
+          const b2 = box(mid);
+          if (b2 && b2.x1 - b2.x0 <= W2 && b2.y1 - b2.y0 <= H2) hi = mid;
+          else lo = mid;
+        }
+        const b = box(hi);
+        this.fitR = hi;
+        this.lensGoal = { x: (xMin + xMax) / 2 - (b.x0 + b.x1) / 2, y: (yMin + yMax) / 2 - (b.y0 + b.y1) / 2 };
+        this.goalTarget.set(0, 0, 0);
+        if (!this.fitted) {
+          this.fitted = true;
+          this.cam.r = hi;
+          this.target.set(0, 0, 0);
+          this.cam.az = this.goal.az;
+          this.cam.pol = this.goal.pol = pol;
+          this.lens = { ...this.lensGoal };
+        }
+        this.dirty = true;
+      }
+      applyLens() {
+        const w = this.width || 1;
+        const h = this.height || 1;
+        this.camera.setViewOffset(w, h, -this.lens.x * w / 2, this.lens.y * h / 2, w, h);
+      }
+      resize() {
+        const rect = this.canvas.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rect.width));
+        const h = Math.max(1, Math.round(rect.height));
+        if (w === this.width && h === this.height) return;
+        this.width = w;
+        this.height = h;
+        const wasPortrait = this.portrait;
+        this.portrait = h >= w * 1.05;
+        this.dirty = true;
+        this.renderer.setSize(w, h, false);
+        this.camera.aspect = w / h;
+        const asp = w / h;
+        this.camera.fov = asp < 1 ? clamp(2 * Math.atan(Math.tan(17 * Math.PI / 180) / asp) * 180 / Math.PI, 32, 64) : 32;
+        this.camera.updateProjectionMatrix();
+        if (wasPortrait !== this.portrait || !this.fitted) this.goal.pol = this.defaultPol();
+        this.fit();
+        if (this.D) this.placeDie(this.D.tn, true);
+      }
+      // ---- input ----------------------------------------------------------------------
+      bindInput() {
+        const el = this.canvas;
+        const pts = /* @__PURE__ */ new Map();
+        let drag = false;
+        let pinch0 = 0;
+        let zoom0 = 1;
+        const dist = () => {
+          const [a, b] = [...pts.values()];
+          return Math.hypot(a.x - b.x, a.y - b.y);
+        };
+        el.addEventListener("pointerdown", (e) => {
+          try {
+            el.setPointerCapture(e.pointerId);
+          } catch {
+          }
+          pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() });
+          if (pts.size === 2) {
+            pinch0 = dist();
+            zoom0 = this.goal.zoom;
+            drag = true;
+          }
+        });
+        el.addEventListener("pointermove", (e) => {
+          const p = pts.get(e.pointerId);
+          if (!p) return;
+          const dx = e.clientX - p.x;
+          const dy = e.clientY - p.y;
+          p.x = e.clientX;
+          p.y = e.clientY;
+          if (pts.size === 1) {
+            if (!drag && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 9) drag = true;
+            if (drag) {
+              this.goal.az -= dx * 62e-4;
+              this.goal.pol = clamp(this.goal.pol - dy * 48e-4, 0.08, 1.12);
+              this.userMoved = true;
+            }
+          } else if (pts.size === 2 && pinch0 > 0) {
+            this.goal.zoom = clamp(zoom0 * pinch0 / Math.max(20, dist()), 0.55, 1.6);
+            this.userMoved = true;
+          }
+        });
+        const end = (e) => {
+          const p = pts.get(e.pointerId);
+          if (!p) return;
+          pts.delete(e.pointerId);
+          if (!drag && pts.size === 0 && e.type === "pointerup" && performance.now() - p.t0 < 700) this.tap(e.clientX, e.clientY);
+          if (pts.size === 0) drag = false;
+          if (pts.size < 2) pinch0 = 0;
+        };
+        el.addEventListener("pointerup", end);
+        el.addEventListener("pointercancel", end);
+        el.addEventListener("wheel", (e) => {
+          e.preventDefault();
+          this.goal.zoom = clamp(this.goal.zoom * (e.deltaY > 0 ? 1.08 : 1 / 1.08), 0.55, 1.6);
+          this.userMoved = true;
+        }, { passive: false });
+        el.addEventListener("dblclick", () => this.resetView());
+      }
+      tap(cx, cy) {
+        const rect = this.canvas.getBoundingClientRect();
+        const ndc = new THREE.Vector2((cx - rect.left) / rect.width * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
+        this.raycaster.setFromCamera(ndc, this.camera);
+        const targets = [];
+        for (const h of this.highlights) targets.push(this.tokens[h.s][h.t].hit);
+        for (const m of this.markers) {
+          if (!m.g.visible) continue;
+          m.hit.userData.pick = { type: "token", s: m.s, t: m.t };
+          targets.push(m.hit);
+        }
+        if (this.dieInvite) targets.push(this.dieHit);
+        const hit = this.raycaster.intersectObjects(targets, false)[0];
+        if (hit) {
+          this.onTap(hit.object.userData.pick);
+          return;
+        }
+        let best = null;
+        let bestD = 46;
+        const v = new THREE.Vector3();
+        const consider = (pos, pick) => {
+          v.copy(pos).project(this.camera);
+          const sx = (v.x + 1) / 2 * rect.width + rect.left;
+          const sy = (1 - v.y) / 2 * rect.height + rect.top;
+          const d = Math.hypot(sx - cx, sy - cy);
+          if (d < bestD) {
+            bestD = d;
+            best = pick;
+          }
+        };
+        for (const h of this.highlights) {
+          const tok = this.tokens[h.s][h.t];
+          consider(new THREE.Vector3(tok.pos.x, 0.45 * tok.scale, tok.pos.z), { type: "token", s: h.s, t: h.t });
+        }
+        for (const m of this.markers) if (m.g.visible) consider(m.g.position, { type: "token", s: m.s, t: m.t });
+        if (this.dieInvite) {
+          bestD = Math.max(bestD, 70);
+          consider(this.die.position, { type: "die" });
+        }
+        if (best) this.onTap(best);
+        else this.onTap({ type: "none" });
+      }
+      // ---- state display --------------------------------------------------------------
+      isIdle() {
+        return !this.busy && this.queue.length === 0;
+      }
+      snap(S) {
+        this.dirty = true;
+        this.queue = [];
+        this.flushTweens();
+        this.D = clone(S);
+        for (let s = 0; s < 4; s++) {
+          for (let t = 0; t < 4; t++) {
+            const tok = this.tokens[s][t];
+            tok.animating = false;
+            tok.mesh.rotation.set(0, 0, 0);
+          }
+        }
+        this.layout(this.D, true);
+        if (S.dv) this.setDieFace(S.dv);
+        this.placeDie(S.tn, true);
+        this.setHighlights([]);
+        this.onDisplay(this.D);
+      }
+      push(S) {
+        this.queue.push(clone(S));
+        if (this.queue.length > 3) this.queue.splice(0, this.queue.length - 1);
+        this.pump();
+      }
+      async pump() {
+        if (this.busy) return;
+        this.busy = true;
+        try {
+          while (this.queue.length) {
+            const next = this.queue.shift();
+            if (!this.D || next.gid !== this.D.gid || this.queue.length > 1) {
+              this.snap(next);
+              continue;
+            }
+            if (next.sq <= this.D.sq) continue;
+            const fast = this.queue.length > 0 ? 2.5 : 1;
+            await this.transition(this.D, next, this.speed * fast);
+            this.D = next;
+            this.onDisplay(next);
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          this.busy = false;
+          if (!this.queue.length) this.onIdle?.();
+        }
+      }
+      async transition(a, b, speed) {
+        this.setHighlights([]);
+        this.dieInvite = false;
+        if (b.rn !== a.rn && b.dv) {
+          await this.rollDie(b.dv, a.tn, T.dice / speed);
+        }
+        const moved = [];
+        const caps = [];
+        let odd = false;
+        for (let s = 0; s < 4; s++) {
+          for (let t = 0; t < 4; t++) {
+            const f = a.tk[s][t];
+            const to = b.tk[s][t];
+            if (f === to) continue;
+            if (to > f) moved.push({ s, t, f, to });
+            else if (to === YARD) caps.push({ s, t, f });
+            else odd = true;
+          }
+        }
+        if (odd || moved.length > 1) {
+          this.layout(b, false);
+        } else {
+          for (const m of moved) await this.animateMove(m, b, speed);
+          if (caps.length) await this.animateCaptures(caps, b, speed);
+          this.layout(b, false);
+        }
+        this.onEvent(b, a);
+        if (b.ev && (!a.ev || a.ev.s !== b.ev.s) && (b.ev.k === "none" || b.ev.k === "t6")) {
+          await this.wait(T.eventPause / speed);
+        }
+        if (b.tn !== a.tn || b.ph === "over") this.placeDie(b.tn, false);
+      }
+      wait(ms) {
+        return this.tween(ms, () => {
+        });
+      }
+      tween(ms, fn) {
+        return new Promise((res) => {
+          if (ms <= 0 || document.hidden) {
+            fn(1);
+            res();
+            return;
+          }
+          this.tweens.add({ t0: performance.now(), ms, fn, res });
+        });
+      }
+      flushTweens() {
+        for (const tw of this.tweens) {
+          try {
+            tw.fn(1);
+          } catch {
+          }
+          tw.res();
+        }
+        this.tweens.clear();
+      }
+      // Target positions for every pawn, spreading pawns that share a square.
+      layout(S, instant) {
+        const groups = /* @__PURE__ */ new Map();
+        for (let s = 0; s < 4; s++) {
+          const on = S.st[s].k === "h" || S.st[s].k === "b";
+          for (let t = 0; t < 4; t++) {
+            const tok = this.tokens[s][t];
+            tok.mesh.visible = on;
+            if (!on) continue;
+            const p = S.tk[s][t];
+            const [x, z] = basePos(s, t, p);
+            tok.target.set(x, 0, z);
+            tok.targetScale = p === FINISH ? 0.62 : 1;
+            if (p >= 0 && p < FINISH) {
+              const key = `${x},${z}`;
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key).push(tok);
+            }
+          }
+        }
+        for (const list of groups.values()) {
+          const n = list.length;
+          if (n < 2) continue;
+          list.forEach((tok, i) => {
+            let off;
+            if (STACK[n]) off = STACK[n][i];
+            else {
+              const a = i / n * Math.PI * 2;
+              off = [Math.cos(a) * 0.3, Math.sin(a) * 0.3];
+            }
+            tok.target.x += off[0];
+            tok.target.z += off[1];
+            tok.targetScale = n > 4 ? 0.56 : 0.74;
+          });
+        }
+        for (const row of this.tokens) {
+          for (const tok of row) {
+            if (instant || !tok.mesh.visible) {
+              tok.pos.copy(tok.target);
+              tok.scale = tok.targetScale;
+            }
+          }
+        }
+      }
+      arc(tok, from, to, height, ms, scaleTo = null) {
+        const s0 = tok.scale;
+        return this.tween(ms, (u) => {
+          const e = easeInOut(u);
+          tok.pos.set(lerp(from.x, to.x, e), from.y + (to.y - from.y) * e + Math.sin(Math.PI * u) * height, lerp(from.z, to.z, e));
+          if (scaleTo != null) tok.scale = lerp(s0, scaleTo, e);
+        });
+      }
+      async animateMove({ s, t, f, to }, b, speed) {
+        const tok = this.tokens[s][t];
+        tok.animating = true;
+        try {
+          if (f === YARD) {
+            const [x, z] = basePos(s, t, 0);
+            this.sfx("exit");
+            await this.arc(tok, tok.pos.clone(), new THREE.Vector3(x, 0, z), 1.5, T.exit / speed, 1);
+            this.sfx("hop");
+          } else {
+            for (let p = f + 1; p <= to; p++) {
+              const [x, z] = basePos(s, t, p);
+              const scaleTo = p === FINISH ? 0.62 : 1;
+              await this.arc(tok, tok.pos.clone(), new THREE.Vector3(x, 0, z), 0.62, T.hop / speed, scaleTo);
+              this.sfx(p === to ? "land" : "hop");
+            }
+            await this.wait(T.moveTail / speed);
+            if (to === FINISH) {
+              this.sfx("home");
+              this.confetti.burst(new THREE.Vector3(tok.pos.x, 0.6, tok.pos.z), [LACQUER[s], "#f2a33a", "#fff3d6"], this.reduceMotion ? 16 : 46, 0.8);
+            }
+          }
+        } finally {
+          tok.animating = false;
+        }
+      }
+      async animateCaptures(caps, b, speed) {
+        this.sfx("capture");
+        this.shake = this.reduceMotion ? 0 : 0.35;
+        await Promise.all(caps.map(async ({ s, t }) => {
+          const tok = this.tokens[s][t];
+          tok.animating = true;
+          const [x, z] = basePos(s, t, YARD);
+          const spin = rand(5, 8) * (Math.random() < 0.5 ? -1 : 1);
+          const from = tok.pos.clone();
+          const to = new THREE.Vector3(x, 0, z);
+          const s0 = tok.scale;
+          await this.tween(T.cap / speed, (u) => {
+            const e = easeInOut(u);
+            tok.pos.set(lerp(from.x, to.x, e), Math.sin(Math.PI * u) * 3.2, lerp(from.z, to.z, e));
+            tok.scale = lerp(s0, 1, e);
+            tok.mesh.rotation.z = Math.sin(Math.PI * u) * 0.9;
+            tok.mesh.rotation.y = spin * u;
+          });
+          tok.mesh.rotation.set(0, 0, 0);
+          tok.animating = false;
+        }));
+        this.sfx("land");
+      }
+      setHighlights(list) {
+        this.dirty = true;
+        for (const row of this.tokens) for (const tok of row) {
+          tok.hl = false;
+          tok.ring.visible = false;
+        }
+        this.markers.forEach((m) => {
+          m.g.visible = false;
+        });
+        this.highlights = list;
+        const seen = /* @__PURE__ */ new Set();
+        let k = 0;
+        for (const h of list) {
+          const tok = this.tokens[h.s][h.t];
+          tok.hl = true;
+          tok.ring.visible = true;
+          if (h.to == null) continue;
+          const [x, z] = basePos(h.s, h.t, h.to);
+          const key = `${x},${z}`;
+          if (seen.has(key) || k >= this.markers.length) continue;
+          seen.add(key);
+          const m = this.markers[k++];
+          m.g.position.set(x, 0.012, z);
+          m.g.visible = true;
+          m.s = h.s;
+          m.t = h.t;
+        }
+      }
+      setDieInvite(on) {
+        if (on !== this.dieInvite) this.dirty = true;
+        this.dieInvite = on;
+      }
+      // ---- die -------------------------------------------------------------------------
+      setDieFace(v) {
+        const q = new THREE.Quaternion().setFromUnitVectors(VAL_N[v], UP);
+        const yaw = new THREE.Quaternion().setFromAxisAngle(UP, this.die.rotation.y || 0.4);
+        this.die.quaternion.copy(yaw.multiply(q));
+      }
+      placeDie(seat, instant) {
+        this.dirty = true;
+        this.dieSeat = seat;
+        const [x, z] = this.dieZone(seat);
+        const to = new THREE.Vector3(x, TABLE_Y + DIE / 2, z);
+        if (instant) {
+          this.die.position.copy(to);
+          return;
+        }
+        const from = this.die.position.clone();
+        if (from.distanceTo(to) < 0.05) return;
+        this.dieMoving = true;
+        this.tween(380, (u) => {
+          const e = easeInOut(u);
+          this.die.position.set(lerp(from.x, to.x, e), lerp(from.y, to.y, e) + Math.sin(Math.PI * u) * 1.2, lerp(from.z, to.z, e));
+        }).then(() => {
+          this.dieMoving = false;
+        });
+      }
+      startSpin() {
+        this.spinning = true;
+        this.spinAxis.set(rand(-1, 1), rand(0.2, 1), rand(-1, 1)).normalize();
+      }
+      stopSpin() {
+        this.spinning = false;
+      }
+      async rollDie(value, seat, ms) {
+        this.sfx("dice");
+        this.dieSeat = seat;
+        const [zx, zz] = this.dieZone(seat);
+        const end = new THREE.Vector3(zx + rand(-0.25, 0.25), TABLE_Y + DIE / 2, zz + rand(-0.25, 0.25));
+        const start = this.die.position.clone();
+        const q0 = this.die.quaternion.clone();
+        const align = new THREE.Quaternion().setFromUnitVectors(VAL_N[value], UP);
+        const q1 = new THREE.Quaternion().setFromAxisAngle(UP, rand(-0.6, 0.6)).multiply(align);
+        const qd = q0.clone().multiply(q1.clone().invert());
+        if (qd.w < 0) qd.set(-qd.x, -qd.y, -qd.z, -qd.w);
+        const ang = 2 * Math.acos(clamp(qd.w, -1, 1));
+        const sn = Math.sqrt(Math.max(0, 1 - qd.w * qd.w));
+        const axis = sn < 1e-4 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(qd.x / sn, qd.y / sn, qd.z / sn);
+        const total = ang + Math.PI * 2 * (2 + Math.floor(Math.random() * 2));
+        const spin = new THREE.Quaternion();
+        const hop = (u) => {
+          const arcs = [[0, 0.5, 1], [0.5, 0.78, 0.3], [0.78, 0.93, 0.09]];
+          for (const [a, b, h] of arcs) if (u >= a && u <= b) return h * Math.sin(Math.PI * (u - a) / (b - a));
+          return 0;
+        };
+        const lifted = start.y > TABLE_Y + DIE / 2 + 0.2;
+        const bounces = [0.5, 0.78, 0.93];
+        let nextB = 0;
+        this.spinning = false;
+        await this.tween(ms, (u) => {
+          const e = easeOutCubic(u);
+          const y0 = lifted ? lerp(start.y, end.y, Math.min(1, u * 2)) : end.y;
+          this.die.position.set(lerp(start.x, end.x, e), y0 + hop(u) * 2.4, lerp(start.z, end.z, e));
+          const k = 1 - easeOutCubic(Math.min(1, u * 1.08));
+          spin.setFromAxisAngle(axis, total * k);
+          this.die.quaternion.multiplyQuaternions(spin, q1);
+          while (nextB < bounces.length && u >= bounces[nextB]) {
+            nextB++;
+            this.sfx("clack");
+          }
+        });
+        this.die.quaternion.copy(q1);
+        this.die.position.copy(end);
+      }
+      celebrate(seat) {
+        const colors = seat == null ? LACQUER : [LACQUER[seat], "#f2a33a", "#fff4d8", LACQUER[seat]];
+        const n = this.reduceMotion ? 30 : 110;
+        this.confetti.burst(new THREE.Vector3(0, 0.6, 0), colors, n, 1.25);
+        setTimeout(() => this.confetti.burst(new THREE.Vector3(rand(-3, 3), 0.5, rand(-3, 3)), colors, Math.round(n * 0.6), 1), 380);
+      }
+      // ---- frame -------------------------------------------------------------------------
+      update(dt, now) {
+        this.time += dt;
+        for (const tw of [...this.tweens]) {
+          const u = Math.min(1, (now - tw.t0) / tw.ms);
+          try {
+            tw.fn(u);
+          } catch (err) {
+            console.error(err);
+          }
+          if (u >= 1) {
+            this.tweens.delete(tw);
+            tw.res();
+          }
+        }
+        if (this.menuMode && !this.reduceMotion && !this.userMoved) this.goal.az += dt * 0.07;
+        const k = 1 - Math.exp(-dt * 7);
+        this.cam.az = lerp(this.cam.az, this.goal.az, k);
+        this.cam.pol = lerp(this.cam.pol, this.goal.pol, k);
+        this.cam.zoom = lerp(this.cam.zoom, this.goal.zoom, k);
+        this.cam.r = lerp(this.cam.r, this.fitR * this.cam.zoom, k);
+        this.target.lerp(this.goalTarget, k);
+        this.lens.x = lerp(this.lens.x, this.lensGoal.x, k);
+        this.lens.y = lerp(this.lens.y, this.lensGoal.y, k);
+        this.applyLens();
+        this.placeCamera(this.camera, this.cam.az, this.cam.pol, this.cam.r, this.target);
+        this.scene.fog.near = this.cam.r * 1.25;
+        this.scene.fog.far = this.cam.r * 3.2;
+        if (this.shake > 0) {
+          this.shake = Math.max(0, this.shake - dt * 1.6);
+          const a = this.shake * 0.25;
+          this.camera.position.x += rand(-a, a);
+          this.camera.position.y += rand(-a, a);
+        }
+        const kk = 1 - Math.exp(-dt * 14);
+        for (const row of this.tokens) {
+          for (const tok of row) {
+            if (!tok.animating) {
+              tok.pos.lerp(tok.target, kk);
+              tok.scale = lerp(tok.scale, tok.targetScale, kk);
+            }
+            const bob = tok.hl && !tok.animating ? 0.09 + 0.09 * Math.sin(this.time * 6.5 + tok.phase) : 0;
+            tok.mesh.position.set(tok.pos.x, tok.pos.y + bob, tok.pos.z);
+            tok.mesh.scale.setScalar(tok.scale);
+            if (tok.ring.visible) {
+              const pulse = 1 + 0.12 * Math.sin(this.time * 6.5 + tok.phase);
+              tok.ring.position.set(tok.pos.x, 0.014, tok.pos.z);
+              tok.ring.scale.setScalar(tok.scale * pulse);
+            }
+          }
+        }
+        for (const m of this.markers) {
+          if (!m.g.visible) continue;
+          const p = 1 + 0.1 * Math.sin(this.time * 5);
+          m.g.scale.set(p, 1, p);
+        }
+        if (this.spinning) {
+          const [x, z] = this.dieZone(this.dieSeat);
+          const ty = TABLE_Y + DIE / 2 + 1.4 + Math.sin(this.time * 9) * 0.15;
+          this.die.position.x = lerp(this.die.position.x, x, kk);
+          this.die.position.z = lerp(this.die.position.z, z, kk);
+          this.die.position.y = lerp(this.die.position.y, ty, kk);
+          const q = new THREE.Quaternion().setFromAxisAngle(this.spinAxis, dt * 14);
+          this.die.quaternion.premultiply(q);
+        }
+        this.dieRing.visible = this.dieInvite && !this.spinning;
+        if (this.dieRing.visible) {
+          const p = 1 + 0.1 * Math.sin(this.time * 5.5);
+          this.dieRing.position.set(this.die.position.x, TABLE_Y + 0.015, this.die.position.z);
+          this.dieRing.scale.setScalar(p);
+        }
+        this.confetti.update(dt);
+        if (this.tweens.size || this.spinning || this.dieInvite || this.highlights.length || this.confetti.active > 0 || this.shake > 0) return true;
+        if (this.menuMode && !this.reduceMotion && !this.userMoved) return true;
+        if (Math.abs(this.cam.az - this.goal.az) > 1e-4 || Math.abs(this.cam.pol - this.goal.pol) > 1e-4) return true;
+        if (Math.abs(this.cam.r - this.fitR * this.cam.zoom) > 1e-3 || Math.abs(this.cam.zoom - this.goal.zoom) > 1e-4) return true;
+        if (this.target.distanceToSquared(this.goalTarget) > 1e-6) return true;
+        if (Math.abs(this.lens.x - this.lensGoal.x) > 1e-4 || Math.abs(this.lens.y - this.lensGoal.y) > 1e-4) return true;
+        for (const row of this.tokens) {
+          for (const tok of row) {
+            if (tok.animating || tok.pos.distanceToSquared(tok.target) > 1e-6 || Math.abs(tok.scale - tok.targetScale) > 1e-4) return true;
+          }
+        }
+        return false;
+      }
+    };
+  }
+});
+
+// site/js/app.js
+init_engine();
+
+// site/js/host.js
+init_engine();
+var Host = class {
+  constructor(S, opts = {}) {
+    this.S = S;
+    this.speed = opts.speed || 1;
+    this.online = !!opts.online;
+    this.turnMs = opts.turnMs || 3e4;
+    this.onChange = opts.onChange || (() => {
+    });
+    this.autoSeat = opts.autoSeat || ((st, seat) => st.st[seat].k === "b");
+    this.rng = opts.rng || null;
+    this.timer = null;
+    this.busyUntil = 0;
+    this.deadline = 0;
+    this.turnKey = "";
+    this.stopped = false;
+  }
+  now() {
+    return performance.now();
+  }
+  start() {
+    this.publish(null);
+  }
+  stop() {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    this.timer = null;
+  }
+  setSpeed(v) {
+    this.speed = v;
+    this.plan();
+  }
+  publish(prev) {
+    const S = this.S;
+    const ms = prev ? animMs(prev, S, this.speed) : 0;
+    this.busyUntil = Math.max(this.busyUntil, this.now() + ms);
+    const key = `${S.tn}:${S.ph}:${S.rn}`;
+    const timed = this.online && (S.ph === "roll" || S.ph === "move") && !this.autoSeat(S, S.tn);
+    if (timed) {
+      if (key !== this.turnKey || !this.deadline) this.deadline = this.busyUntil + this.turnMs;
+      S.tl = Math.max(0, Math.round(this.deadline - this.now()));
+    } else {
+      this.deadline = 0;
+      S.tl = 0;
+    }
+    this.turnKey = key;
+    this.onChange(S, prev);
+    this.plan();
+  }
+  // Apply a change that is not a game move (seat names, away flags).
+  patch(fn) {
+    const prev = this.S;
+    const S = clone(prev);
+    fn(S);
+    S.sq = prev.sq + 1;
+    this.S = S;
+    this.publish(prev);
+  }
+  at(ms, fn) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (!this.stopped) fn();
+    }, Math.max(0, ms));
+  }
+  plan() {
+    clearTimeout(this.timer);
+    this.timer = null;
+    const S = this.S;
+    if (this.stopped || S.ph === "over" || S.ph === "lobby") return;
+    const seat = S.tn;
+    const rn = S.rn;
+    const auto = this.autoSeat(S, seat);
+    const wait = Math.max(0, this.busyUntil - this.now());
+    const think = T.think / this.speed;
+    if (S.ph === "roll") {
+      if (auto) this.at(wait + think, () => this.roll(seat, rn, true));
+      else if (this.deadline) this.at(this.deadline - this.now(), () => this.timeout(seat, rn));
+      return;
+    }
+    if (S.ph === "move") {
+      const moves = legalMoves(S).filter((m) => S.mv.includes(m.t));
+      if (S.ru.am && movesAreEquivalent(moves)) {
+        this.at(wait + T.autoMove / this.speed, () => this.move(seat, moves[0].t, rn, true));
+      } else if (auto) {
+        this.at(wait + think, () => this.move(seat, botPick(S), rn, true));
+      } else if (this.deadline) {
+        this.at(this.deadline - this.now(), () => this.timeout(seat, rn));
+      }
+    }
+  }
+  timeout(seat, rn) {
+    const S = this.S;
+    if (S.tn !== seat || S.rn !== rn) return;
+    if (S.st[seat].k === "h" && !S.st[seat].w) {
+      this.patch((st) => {
+        st.st[seat].w = 2;
+      });
+    } else {
+      this.plan();
+    }
+  }
+  // `rn` ties an action to the roll it answers, so stale or repeated taps are ignored.
+  roll(seat, rn = null, internal = false) {
+    const S = this.S;
+    if (this.stopped || S.ph !== "roll" || S.tn !== seat) return false;
+    if (rn != null && rn !== S.rn) return false;
+    if (!internal && this.now() < this.busyUntil - 1500) return false;
+    const value = this.rng ? this.rng() : rollDie();
+    this.S = applyRoll(S, value);
+    this.publish(S);
+    return true;
+  }
+  move(seat, t, rn = null, internal = false) {
+    const S = this.S;
+    if (this.stopped || S.ph !== "move" || S.tn !== seat || !S.mv.includes(t)) return false;
+    if (rn != null && rn !== S.rn) return false;
+    if (!internal && this.now() < this.busyUntil - 1500) return false;
+    this.S = applyMove(S, t);
+    this.publish(S);
+    return true;
+  }
+  end() {
+    const prev = this.S;
+    this.S = endGame(prev);
+    this.publish(prev);
+  }
+};
+
+// site/js/net.js
+init_engine();
+var ROOM_PREFIX = "ludo-";
+var TURN_MS = 3e4;
+var LOBBY_GRACE = 8e3;
+var GAME_GRACE = 3500;
+var HOST_GONE_MS = 2500;
+var ZOMBIE_MS = 55e3;
+var JOIN_TIMEOUT = 7e3;
+var CID_RE = /^[a-z0-9]{6,16}$/;
+function sessionGet(k) {
+  try {
+    return sessionStorage.getItem(k);
+  } catch {
+    return null;
+  }
+}
+function sessionSet(k, v) {
+  try {
+    if (v == null) sessionStorage.removeItem(k);
+    else sessionStorage.setItem(k, v);
+  } catch {
+  }
+}
+function clientId() {
+  let id = sessionGet("ludo3d.cid");
+  if (!id || !CID_RE.test(id)) {
+    id = randomId(10);
+    sessionSet("ludo3d.cid", id);
+  }
+  return id;
+}
+var int = (v, lo, hi, d = lo) => Number.isInteger(v) && v >= lo && v <= hi ? v : d;
+var Online = class {
+  // roomFactory: optional () => Promise<room|null>, used where the Claude page room isn't available
+  constructor({ roomFactory = null } = {}) {
+    this.roomFactory = roomFactory;
+    this.listed = true;
+    this.cid = clientId();
+    this.listeners = {};
+    this.lobby = null;
+    this.table = null;
+    this.role = null;
+    this.code = null;
+    this.S = null;
+    this.recvAt = 0;
+    this.name = "";
+    this.pc = 3;
+    this.host = null;
+    this.available = null;
+    this.connected = false;
+    this.tableConnected = false;
+    this.tables = [];
+    this.people = 0;
+    this.actionId = 0;
+    this.done = /* @__PURE__ */ new Map();
+    this.bind = /* @__PURE__ */ new Map();
+    this.absentSince = /* @__PURE__ */ new Map();
+    this.unsub = [];
+    this.authority = null;
+    this.hostMissingSince = 0;
+  }
+  on(ev, fn) {
+    (this.listeners[ev] ||= []).push(fn);
+  }
+  emit(ev, ...args) {
+    for (const fn of this.listeners[ev] || []) {
+      try {
+        fn(...args);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+  status() {
+    return {
+      available: this.available,
+      connected: this.connected,
+      tableConnected: this.tableConnected,
+      role: this.role,
+      code: this.code,
+      people: this.people,
+      atTable: this.table ? this.table.peers().filter((p) => p.kind === "viewer").length : 0
+    };
+  }
+  get rejoinCode() {
+    const c = sessionGet("ludo3d.table");
+    return c && /^[a-z0-9]{5}$/.test(c) ? c : null;
+  }
+  // ---- lobby ------------------------------------------------------------------
+  connect() {
+    if (this.lobby) return Promise.resolve(true);
+    if (!this.connecting) {
+      this.available = null;
+      this.emit("status", this.status());
+      this.connecting = this.open().finally(() => {
+        this.connecting = null;
+      });
+    }
+    return this.connecting;
+  }
+  async open() {
+    let room = null;
+    try {
+      if (typeof window.claude?.use === "function") room = await window.claude.use("room");
+      if (!room && this.roomFactory) room = await this.roomFactory();
+    } catch {
+      room = null;
+    }
+    if (!room) {
+      this.available = false;
+      this.emit("status", this.status());
+      return false;
+    }
+    this.lobby = room;
+    this.listed = room.listed !== false;
+    this.available = true;
+    room.onPeers((ch) => this.onLobbyPeers(ch.peers), (err) => this.onFatal(err));
+    room.onConnection((c) => {
+      this.connected = c;
+      this.emit("status", this.status());
+    }, () => {
+    });
+    this.emit("status", this.status());
+    return true;
+  }
+  onFatal(err) {
+    this.available = false;
+    this.connected = false;
+    this.emit("status", this.status());
+    if (this.table) this.emit("error", "The connection to online play ended.");
+    console.warn("room", err);
+  }
+  onLobbyPeers(peers) {
+    const tables = [];
+    for (const p of peers) {
+      const tb = p.presence?.tb;
+      if (!tb || typeof tb.c !== "string" || !/^[a-z0-9]{5}$/.test(tb.c) || p.sameTab) continue;
+      tables.push({
+        code: tb.c,
+        name: cleanName(tb.n) || "Someone",
+        players: int(tb.p, 0, 4, 0),
+        open: int(tb.o, 0, 4, 0),
+        playing: tb.s === "p",
+        mine: p.isMe
+      });
+    }
+    this.tables = tables;
+    this.people = peers.filter((p) => p.kind === "viewer").length;
+    this.emit("lobby", tables);
+    this.emit("status", this.status());
+  }
+  updateLobbyPresence() {
+    if (!this.lobby) return;
+    if (this.role !== "host" || !this.S) {
+      this.lobby.presence({ tb: null }).catch(() => {
+      });
+      return;
+    }
+    const st = this.S.st;
+    this.lobby.presence({
+      tb: {
+        c: this.code,
+        n: this.name,
+        p: st.filter((x) => x.k === "h" || x.k === "b").length,
+        o: st.filter((x) => x.k === "o").length,
+        s: this.S.ph === "lobby" ? "w" : "p"
+      }
+    }).catch(() => {
+    });
+  }
+  // ---- table lifecycle ------------------------------------------------------------
+  meObj() {
+    return { n: this.name, c: this.cid, pc: this.pc, v: 1 };
+  }
+  async createTable(name, color = 3, rules = {}) {
+    await this.leave();
+    this.name = cleanName(name) || "Host";
+    this.pc = int(color, 0, 3, 3);
+    const code = typeof this.lobby.codeFor === "function" ? this.lobby.codeFor(() => randomId(5)) : randomId(5);
+    const t = await this.lobby.join(ROOM_PREFIX + code);
+    this.table = t;
+    this.code = code;
+    this.role = "host";
+    const seats = [0, 1, 2, 3].map(() => makeSeat("o"));
+    seats[this.pc] = makeSeat("h", this.name, this.cid);
+    this.S = newLobby({ seats, rules });
+    this.listenTable();
+    this.publish();
+    sessionSet("ludo3d.table", code);
+    this.emit("role", "host");
+    return code;
+  }
+  async joinTable(code, name, color = 3) {
+    code = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!/^[a-z0-9]{5}$/.test(code)) throw new Error("A table code has 5 letters or numbers.");
+    await this.leave();
+    this.name = cleanName(name) || "Player";
+    this.pc = int(color, 0, 3, 3);
+    if (typeof this.lobby.prepareJoin === "function") await this.lobby.prepareJoin(code);
+    const t = await this.lobby.join(ROOM_PREFIX + code);
+    this.table = t;
+    this.code = code;
+    this.role = "guest";
+    this.S = null;
+    this.authority = null;
+    t.presence({ me: this.meObj(), g: null, ac: null }).catch(() => {
+    });
+    this.listenTable();
+    sessionSet("ludo3d.table", code);
+    this.emit("role", "guest");
+    clearTimeout(this.joinTimer);
+    this.joinTimer = setTimeout(() => {
+      if (this.table === t && !this.S) {
+        this.leave();
+        this.emit("error", `No open table uses the code ${code.toUpperCase()} right now. Check the code with the host.`);
+      }
+    }, JOIN_TIMEOUT);
+    return code;
+  }
+  listenTable() {
+    const t = this.table;
+    this.unsub.push(t.onPeers((ch) => this.onTablePeers(ch.peers), (err) => {
+      if (this.table !== t) return;
+      this.emit("error", "Lost the connection to this table.");
+      this.leave();
+      console.warn("table", err);
+    }));
+    this.unsub.push(t.onConnection((c) => {
+      this.tableConnected = c;
+      this.emit("status", this.status());
+    }, () => {
+    }));
+    this.poll = setInterval(() => {
+      if (this.table === t) this.onTablePeers(t.peers());
+    }, 700);
+  }
+  async leave() {
+    clearInterval(this.poll);
+    clearTimeout(this.joinTimer);
+    for (const u of this.unsub) {
+      try {
+        u();
+      } catch {
+      }
+    }
+    this.unsub = [];
+    this.host?.stop();
+    this.host = null;
+    const t = this.table;
+    this.table = null;
+    const wasHost = this.role === "host";
+    this.role = null;
+    this.code = null;
+    this.S = null;
+    this.authority = null;
+    this.hostMissingSince = 0;
+    this.done.clear();
+    this.bind.clear();
+    this.absentSince.clear();
+    sessionSet("ludo3d.table", null);
+    if (wasHost && this.lobby) this.lobby.presence({ tb: null }).catch(() => {
+    });
+    if (t) {
+      try {
+        await t.leave();
+      } catch {
+      }
+    }
+    this.emit("status", this.status());
+  }
+  publish() {
+    if (!this.table || this.role !== "host") return;
+    this.table.presence({ me: this.meObj(), g: this.S, ac: null }).catch((err) => console.warn("presence", err));
+    this.recvAt = performance.now();
+    this.updateLobbyPresence();
+    this.emit("state", this.S, this.recvAt);
+  }
+  // ---- table traffic ----------------------------------------------------------------
+  hostSeatOf(g, cid) {
+    return g.st.findIndex((x) => x.k === "h" && x.c === cid);
+  }
+  onTablePeers(peers) {
+    if (!this.table) return;
+    const now = Date.now();
+    let best = null;
+    for (const p of peers) {
+      if (p.sameTab || p.kind !== "viewer") continue;
+      const g = p.presence?.g;
+      if (!g || !validState(g)) continue;
+      const cid = typeof p.presence.me?.c === "string" ? p.presence.me.c : "";
+      const seat = this.hostSeatOf(g, cid);
+      const rank = g.ep * 10 + (seat < 0 ? -1 : 3 - seat);
+      if (!best || rank > best.rank) best = { p, g, cid, rank };
+    }
+    if (this.role === "host") {
+      const mySeat = this.hostSeatOf(this.S, this.cid);
+      const myRank = this.S.ep * 10 + (mySeat < 0 ? -1 : 3 - mySeat);
+      if (best && best.rank > myRank) {
+        this.stepDown(best);
+        return;
+      }
+      this.hostProcess(peers, now);
+      return;
+    }
+    if (best) {
+      clearTimeout(this.joinTimer);
+      this.hostMissingSince = 0;
+      this.authority = { peer: best.p.peer, cid: best.cid, updatedAt: best.p.updatedAt };
+      const g = best.g;
+      if (!this.S || g.gid !== this.S.gid || g.sq !== this.S.sq || g.ep !== this.S.ep) {
+        this.S = clone(g);
+        this.recvAt = performance.now();
+        this.emit("state", this.S, this.recvAt);
+      }
+      const live = this.S.ph === "roll" || this.S.ph === "move";
+      if (live && now - best.p.updatedAt > ZOMBIE_MS) this.elect(peers, best.p.peer);
+    } else if (this.S) {
+      if (!this.hostMissingSince) this.hostMissingSince = now;
+      else if (now - this.hostMissingSince > HOST_GONE_MS) this.elect(peers, null);
+    }
+  }
+  elect(peers, exclude) {
+    const S = this.S;
+    if (!S) return;
+    const here = /* @__PURE__ */ new Set([this.cid]);
+    for (const p of peers) {
+      if (p.kind !== "viewer" || p.peer === exclude) continue;
+      const c = p.presence?.me?.c;
+      if (typeof c === "string") here.add(c);
+    }
+    const oldHost = this.authority?.cid || "";
+    const order = [0, 1, 2, 3].filter((s) => S.st[s].k === "h" && S.st[s].c !== oldHost && here.has(S.st[s].c));
+    if (!order.length) return;
+    if (S.st[order[0]].c === this.cid) this.becomeHost(S, oldHost);
+  }
+  becomeHost(S0, oldHostCid) {
+    const S = clone(S0);
+    S.ep += 1;
+    S.sq += 1;
+    for (let s = 0; s < 4; s++) {
+      if (S.st[s].k === "h" && S.st[s].c === oldHostCid) {
+        if (S.ph === "lobby") S.st[s] = makeSeat("o");
+        else S.st[s].w = 1;
+      }
+    }
+    this.role = "host";
+    this.authority = null;
+    this.hostMissingSince = 0;
+    this.done.clear();
+    this.emit("role", "host");
+    this.emit("toast", "The host left. You are hosting this table now.");
+    if (S.ph === "lobby" || S.ph === "over") {
+      this.host?.stop();
+      this.host = null;
+      this.S = S;
+      this.publish();
+    } else {
+      this.startHost(S);
+    }
+  }
+  stepDown(best) {
+    this.host?.stop();
+    this.host = null;
+    this.role = "guest";
+    this.table.presence({ g: null, me: this.meObj(), ac: null }).catch(() => {
+    });
+    if (this.lobby) this.lobby.presence({ tb: null }).catch(() => {
+    });
+    this.authority = { peer: best.p.peer, cid: best.cid, updatedAt: best.p.updatedAt };
+    this.S = clone(best.g);
+    this.recvAt = performance.now();
+    this.emit("role", "guest");
+    this.emit("state", this.S, this.recvAt);
+  }
+  startHost(S) {
+    this.host?.stop();
+    this.host = new Host(S, {
+      online: true,
+      turnMs: TURN_MS,
+      autoSeat: (st, seat) => st.st[seat].k === "b" || st.st[seat].w > 0,
+      onChange: (next) => {
+        this.S = next;
+        this.publish();
+      }
+    });
+    this.host.start();
+  }
+  hostProcess(peers, now) {
+    const present = /* @__PURE__ */ new Map();
+    const peerIds = new Set(peers.map((p) => p.peer));
+    for (const p of peers) {
+      if (p.sameTab || p.kind !== "viewer") continue;
+      const me = p.presence?.me;
+      if (!me || typeof me.c !== "string" || !CID_RE.test(me.c) || me.c === this.cid) continue;
+      const bound = this.bind.get(me.c);
+      if (bound && bound !== p.peer && peerIds.has(bound)) continue;
+      this.bind.set(me.c, p.peer);
+      present.set(me.c, p);
+    }
+    if (this.S.ph === "lobby") this.hostLobby(present, now);
+    else this.hostGame(present, now);
+    for (const [cid, p] of present) {
+      const ac = p.presence.ac;
+      if (!ac || typeof ac !== "object" || !Number.isInteger(ac.i)) continue;
+      if (this.done.get(p.peer) === ac.i) continue;
+      this.done.set(p.peer, ac.i);
+      this.hostAction(cid, p, ac, present);
+    }
+  }
+  hostLobby(present, now) {
+    const S = this.S;
+    const st = clone(S.st);
+    let changed = false;
+    for (const [cid, p] of present) {
+      const me = p.presence.me;
+      const name = cleanName(me.n) || "Player";
+      const seat = st.findIndex((x) => x.k === "h" && x.c === cid);
+      if (seat >= 0) {
+        if (st[seat].n !== name) {
+          st[seat].n = name;
+          changed = true;
+        }
+        if (st[seat].w) {
+          st[seat].w = 0;
+          changed = true;
+        }
+        this.absentSince.delete(cid);
+        continue;
+      }
+      const pc = int(me.pc, 0, 3, -1);
+      const pick = pc >= 0 && st[pc].k === "o" ? pc : st.findIndex((x) => x.k === "o");
+      if (pick >= 0) {
+        st[pick] = makeSeat("h", name, cid);
+        changed = true;
+      }
+    }
+    for (let s = 0; s < 4; s++) {
+      const x = st[s];
+      if (x.k !== "h" || x.c === this.cid || present.has(x.c)) continue;
+      const since = this.absentSince.get(x.c) ?? now;
+      this.absentSince.set(x.c, since);
+      if (now - since > LOBBY_GRACE) {
+        st[s] = makeSeat("o");
+        this.absentSince.delete(x.c);
+        changed = true;
+      } else if (!x.w) {
+        x.w = 1;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.S = { ...clone(S), st, sq: S.sq + 1 };
+      this.publish();
+    }
+  }
+  hostGame(present, now) {
+    if (!this.host || this.S.ph === "over") return;
+    const S = this.S;
+    const changes = [];
+    for (let s = 0; s < 4; s++) {
+      const x = S.st[s];
+      if (x.k !== "h" || x.c === this.cid) continue;
+      if (present.has(x.c)) {
+        this.absentSince.delete(x.c);
+        const name = cleanName(present.get(x.c).presence.me.n) || x.n;
+        if (x.w === 1 || name !== x.n) changes.push([s, x.w === 1 ? 0 : x.w, name]);
+      } else {
+        const since = this.absentSince.get(x.c) ?? now;
+        this.absentSince.set(x.c, since);
+        if (now - since > GAME_GRACE && x.w !== 1) changes.push([s, 1, x.n]);
+      }
+    }
+    if (changes.length) {
+      this.host.patch((st) => {
+        for (const [s, w, n] of changes) {
+          st.st[s].w = w;
+          st.st[s].n = n;
+        }
+      });
+    }
+  }
+  hostAction(cid, p, ac, present) {
+    const S = this.S;
+    const seat = S.st.findIndex((x) => x.k === "h" && x.c === cid);
+    const t = int(ac.t, 0, 3, -1);
+    if (ac.k === "r" && seat >= 0 && this.host && Number.isInteger(ac.rn)) {
+      this.wake(seat);
+      this.host.roll(seat, ac.rn);
+    } else if (ac.k === "p" && seat >= 0 && this.host && t >= 0 && Number.isInteger(ac.rn)) {
+      this.wake(seat);
+      this.host.move(seat, t, ac.rn);
+    } else if (ac.k === "seat" && S.ph === "lobby" && seat >= 0 && t >= 0 && S.st[t].k === "o") {
+      const st = clone(S.st);
+      st[t] = st[seat];
+      st[seat] = makeSeat("o");
+      this.S = { ...clone(S), st, sq: S.sq + 1 };
+      this.publish();
+    } else if (ac.k === "take" && this.host && S.ph !== "lobby" && S.ph !== "over" && seat < 0 && t >= 0) {
+      const x = S.st[t];
+      if (x.k === "h" && x.w === 1 && !present.has(x.c) && x.c !== this.cid) {
+        const name = cleanName(p.presence.me.n) || "Player";
+        this.host.patch((st) => {
+          st.st[t].c = cid;
+          st.st[t].n = name;
+          st.st[t].w = 0;
+        });
+      }
+    }
+  }
+  wake(seat) {
+    if (this.S.st[seat].w && this.host) {
+      this.host.patch((st) => {
+        st.st[seat].w = 0;
+      });
+    }
+  }
+  // ---- actions from this device -------------------------------------------------------
+  mySeat(S = this.S) {
+    if (!S) return -1;
+    return S.st.findIndex((x) => x.k === "h" && x.c === this.cid);
+  }
+  send(k, extra = {}) {
+    if (!this.table) return;
+    this.actionId += 1;
+    this.table.presence({ ac: { i: this.actionId, k, ...extra } }).catch((err) => console.warn("presence", err));
+  }
+  roll(rn) {
+    const seat = this.mySeat();
+    if (seat < 0) return;
+    if (this.role === "host" && this.host) {
+      this.wake(seat);
+      this.host.roll(seat, rn);
+    } else this.send("r", { rn });
+  }
+  pick(t, rn) {
+    const seat = this.mySeat();
+    if (seat < 0) return;
+    if (this.role === "host" && this.host) {
+      this.wake(seat);
+      this.host.move(seat, t, rn);
+    } else this.send("p", { t, rn });
+  }
+  chooseSeat(t) {
+    const S = this.S;
+    if (!S || S.ph !== "lobby" || S.st[t].k !== "o") return;
+    this.pc = t;
+    if (this.role === "host") {
+      const seat = this.mySeat();
+      const st = clone(S.st);
+      if (seat >= 0) {
+        st[t] = st[seat];
+        st[seat] = makeSeat("o");
+      } else st[t] = makeSeat("h", this.name, this.cid);
+      this.S = { ...clone(S), st, sq: S.sq + 1 };
+      this.publish();
+    } else {
+      this.table.presence({ me: this.meObj() }).catch(() => {
+      });
+      this.send("seat", { t });
+    }
+  }
+  takeSeat(t) {
+    this.send("take", { t });
+  }
+  // host controls in the waiting room
+  cycleSeat(t) {
+    const S = this.S;
+    if (this.role !== "host" || !S || S.ph !== "lobby") return;
+    const x = S.st[t];
+    if (x.k === "h") return;
+    const next = { o: "b", b: "x", x: "o" }[x.k];
+    const st = clone(S.st);
+    st[t] = makeSeat(next);
+    this.S = { ...clone(S), st, sq: S.sq + 1 };
+    this.publish();
+  }
+  setRule(key, on) {
+    const S = this.S;
+    if (this.role !== "host" || !S || S.ph !== "lobby" || !(key in DEFAULT_RULES)) return;
+    this.S = { ...clone(S), ru: { ...S.ru, [key]: on ? 1 : 0 }, sq: S.sq + 1 };
+    this.publish();
+  }
+  startGame(botNames = []) {
+    const S = this.S;
+    if (this.role !== "host" || !S || S.ph !== "lobby") return "Only the host can start.";
+    const seats = S.st.map((x, i) => {
+      if (x.k === "o") return makeSeat("x");
+      if (x.k === "b") return makeSeat("b", botNames[i] || "Bot");
+      return { ...x, w: 0 };
+    });
+    const active = [0, 1, 2, 3].filter((i) => seats[i].k === "h" || seats[i].k === "b");
+    if (active.length < 2) return "Seat at least two players or bots to start.";
+    const first = active[Math.floor(Math.random() * active.length)];
+    const G = newGame({ seats, rules: S.ru, first, ep: S.ep });
+    G.sq = S.sq + 1;
+    this.startHost(G);
+    return null;
+  }
+  playAgain() {
+    const S = this.S;
+    if (this.role !== "host" || !S || S.ph !== "over") return;
+    const seats = S.st.map((x) => ({ ...x, w: x.k === "h" && x.c !== this.cid && x.w === 1 ? 1 : 0 }));
+    const active = [0, 1, 2, 3].filter((i) => seats[i].k === "h" || seats[i].k === "b");
+    const G = newGame({ seats, rules: S.ru, first: active[Math.floor(Math.random() * active.length)], ep: S.ep });
+    G.sq = S.sq + 1;
+    this.startHost(G);
+  }
+  // Back to the waiting room so people can change seats or rules.
+  toLobby() {
+    const S = this.S;
+    if (this.role !== "host" || !S) return;
+    this.host?.stop();
+    this.host = null;
+    const seats = S.st.map((x) => x.k === "x" ? makeSeat("o") : { ...x, w: 0 });
+    this.S = newLobby({ seats, rules: S.ru, ep: S.ep });
+    this.S.sq = S.sq + 1;
+    this.publish();
+  }
+};
+
+// site/js/mqttroom.js
+var MQTT_ESM = "https://cdn.jsdelivr.net/npm/mqtt@5.16.1/dist/mqtt.esm.js";
+var PUBLIC_BROKERS = ["wss://broker.hivemq.com:8884/mqtt", "wss://broker.emqx.io:8084/mqtt"];
+var PREFIX = "ludo3d-pachisi/v1";
+var BYE_TOPIC = `${PREFIX}/bye`;
+var HEARTBEAT_MS = 4e3;
+var GONE_MS = 13e3;
+var CONNECT_MS = 7e3;
+var ID = "abcdefghjkmnpqrstuvwxyz23456789";
+var NAME_RE = /^[a-z0-9][a-z0-9_.-]{0,47}$/;
+function rid(n) {
+  const b = new Uint32Array(n);
+  crypto.getRandomValues(b);
+  let s = "";
+  for (const x of b) s += ID[x % ID.length];
+  return s;
+}
+function sender(peer, isMe, rec) {
+  return Object.freeze({ peer, by: null, isMe, sameTab: isMe, kind: "viewer", guest: false, presence: rec.presence, updatedAt: rec.updatedAt });
+}
+var Table = class {
+  constructor(hub, name) {
+    this.hub = hub;
+    this.name = name;
+    this.topic = `${PREFIX}/t/${name}`;
+    this.me = {};
+    this.map = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Set();
+    this.closed = false;
+    this.snap = Object.freeze([]);
+    this.dirty = true;
+    this.lastBeat = 0;
+    this.touchSelf();
+  }
+  touchSelf() {
+    const now = Date.now();
+    this.map.set(this.hub.peer, { presence: Object.freeze({ ...this.me }), updatedAt: now, seen: now });
+    this.changed();
+  }
+  send(m) {
+    this.hub.publish(this.topic, { ...m, f: this.hub.peer });
+    this.lastBeat = Date.now();
+  }
+  hello() {
+    if (!this.closed) this.send({ t: "hi", p: this.me });
+  }
+  receive(m) {
+    if (this.closed) return;
+    const now = Date.now();
+    if (m.t === "bye") {
+      if (this.map.delete(m.f)) this.changed();
+      return;
+    }
+    const known = this.map.get(m.f);
+    if (m.t === "hb") {
+      if (known) known.seen = now;
+      else this.hello();
+      return;
+    }
+    if (m.t === "hi" || m.t === "p") {
+      const pres = m.p && typeof m.p === "object" && !Array.isArray(m.p) ? m.p : {};
+      const text = JSON.stringify(pres);
+      const same = known && known.text === text;
+      this.map.set(m.f, {
+        presence: same ? known.presence : Object.freeze(JSON.parse(text)),
+        text,
+        updatedAt: same ? known.updatedAt : now,
+        seen: now
+      });
+      if (!same) this.changed();
+      if (m.t === "hi") this.send({ t: "p", p: this.me });
+    }
+  }
+  changed() {
+    this.dirty = true;
+    if (this.notifyT) return;
+    this.notifyT = setTimeout(() => {
+      this.notifyT = null;
+      const ch = { peers: this.peers(), joined: [], left: [], updated: [] };
+      for (const fn of [...this.listeners]) {
+        try {
+          fn(ch);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    }, 30);
+  }
+  tick(now) {
+    if (this.closed) return;
+    if (this.hub.isConnected && now - this.lastBeat >= HEARTBEAT_MS) this.send({ t: "hb" });
+    for (const [id, rec] of this.map) {
+      if (id !== this.hub.peer && now - rec.seen > GONE_MS) {
+        this.map.delete(id);
+        this.changed();
+      }
+    }
+  }
+  // ---- the room API ----
+  presence(patch) {
+    if (this.closed) return Promise.reject({ code: "invalid_argument", message: "This room was left." });
+    const next = { ...this.me };
+    for (const [k, v] of Object.entries(patch || {})) {
+      if (v === null) delete next[k];
+      else next[k] = v;
+    }
+    const size = new TextEncoder().encode(JSON.stringify(next)).length;
+    if (size > 4096) return Promise.reject({ code: "invalid_argument", message: `Presence is ${size} bytes; the limit is 4096.` });
+    this.me = next;
+    this.touchSelf();
+    if (!this.pubT) {
+      this.pubT = setTimeout(() => {
+        this.pubT = null;
+        if (!this.closed) this.send({ t: "p", p: this.me });
+      }, 40);
+    }
+    return Promise.resolve();
+  }
+  peers() {
+    if (this.dirty) {
+      this.dirty = false;
+      this.snap = Object.freeze([...this.map].map(([id, rec]) => sender(id, id === this.hub.peer, rec)));
+    }
+    return this.snap;
+  }
+  onPeers(fn) {
+    this.listeners.add(fn);
+    setTimeout(() => {
+      if (this.listeners.has(fn)) fn({ peers: this.peers(), joined: this.peers(), left: [], updated: [] });
+    }, 0);
+    return () => this.listeners.delete(fn);
+  }
+  on() {
+    return () => {
+    };
+  }
+  emit() {
+    return Promise.resolve();
+  }
+  connected() {
+    return !this.closed && this.hub.isConnected;
+  }
+  onConnection(fn) {
+    return this.hub.onConnection(fn);
+  }
+  leave() {
+    if (this.closed) return Promise.resolve();
+    this.send({ t: "bye" });
+    this.closed = true;
+    this.listeners.clear();
+    clearTimeout(this.pubT);
+    this.hub.rooms.delete(this.name);
+    try {
+      this.hub.client?.unsubscribe(this.topic);
+    } catch {
+    }
+    return Promise.resolve();
+  }
+};
+var Hub = class {
+  constructor(mqtt, brokers) {
+    this.mqtt = mqtt;
+    this.brokers = brokers;
+    this.peer = rid(12);
+    this.rooms = /* @__PURE__ */ new Map();
+    this.client = null;
+    this.index = -1;
+    this.isConnected = false;
+    this.connListeners = /* @__PURE__ */ new Set();
+    this.timer = setInterval(() => {
+      const now = Date.now();
+      for (const r of this.rooms.values()) r.tick(now);
+    }, 1e3);
+    addEventListener("pagehide", () => {
+      for (const r of this.rooms.values()) r.send({ t: "bye" });
+    });
+  }
+  onConnection(fn) {
+    this.connListeners.add(fn);
+    setTimeout(() => {
+      if (this.connListeners.has(fn)) fn(this.isConnected);
+    }, 0);
+    return () => this.connListeners.delete(fn);
+  }
+  setConnected(on) {
+    if (on === this.isConnected) return;
+    this.isConnected = on;
+    for (const fn of [...this.connListeners]) {
+      try {
+        fn(on);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+  close() {
+    const c = this.client;
+    this.client = null;
+    this.setConnected(false);
+    if (c) {
+      try {
+        c.end(true);
+      } catch {
+      }
+    }
+  }
+  connectTo(i) {
+    if (this.index === i && this.client) return this.waitConnected(CONNECT_MS);
+    this.close();
+    this.index = i;
+    const client = this.mqtt.connect(this.brokers[i], {
+      clientId: `l3d_${this.peer}`,
+      clean: true,
+      keepalive: 30,
+      reconnectPeriod: 2500,
+      connectTimeout: CONNECT_MS,
+      protocolVersion: 4,
+      will: { topic: BYE_TOPIC, payload: JSON.stringify({ t: "bye", f: this.peer }), qos: 0, retain: false }
+    });
+    this.client = client;
+    client.on("connect", () => {
+      if (this.client !== client) return;
+      client.subscribe(BYE_TOPIC, { qos: 0 });
+      for (const r of this.rooms.values()) client.subscribe(r.topic, { qos: 0 }, () => r.hello());
+      this.setConnected(true);
+    });
+    const down = () => {
+      if (this.client === client) this.setConnected(false);
+    };
+    client.on("close", down);
+    client.on("offline", down);
+    client.on("error", () => {
+    });
+    client.on("message", (topic, payload) => this.onMessage(topic, payload));
+    return this.waitConnected(CONNECT_MS);
+  }
+  waitConnected(ms) {
+    if (this.isConnected) return Promise.resolve(true);
+    return new Promise((res) => {
+      let done = false;
+      const off = this.onConnection((on) => {
+        if (on && !done) {
+          done = true;
+          off();
+          res(true);
+        }
+      });
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          off();
+          res(this.isConnected);
+        }
+      }, ms);
+    });
+  }
+  publish(topic, obj) {
+    if (!this.client || !this.isConnected) return;
+    try {
+      this.client.publish(topic, JSON.stringify(obj), { qos: 0 });
+    } catch {
+    }
+  }
+  onMessage(topic, payload) {
+    if (!payload || payload.length > 32768) return;
+    let m;
+    try {
+      m = JSON.parse(new TextDecoder().decode(payload));
+    } catch {
+      return;
+    }
+    if (!m || typeof m !== "object" || typeof m.f !== "string" || m.f.length > 40 || m.f === this.peer) return;
+    if (topic === BYE_TOPIC) {
+      for (const r of this.rooms.values()) r.receive({ t: "bye", f: m.f });
+      return;
+    }
+    for (const r of this.rooms.values()) if (r.topic === topic) r.receive(m);
+  }
+  async join(name) {
+    if (!NAME_RE.test(name)) throw { code: "invalid_argument", message: "Bad room name." };
+    if (this.rooms.has(name)) return this.rooms.get(name);
+    const r = new Table(this, name);
+    this.rooms.set(name, r);
+    if (this.client && this.isConnected) {
+      await new Promise((res) => {
+        this.client.subscribe(r.topic, { qos: 0 }, () => res());
+        setTimeout(res, 4e3);
+      });
+      r.hello();
+    }
+    return r;
+  }
+};
+function brokerOfCode(code, count = PUBLIC_BROKERS.length) {
+  const k = ID.indexOf(String(code || "")[0]);
+  return k < 0 ? 0 : k % count;
+}
+async function createMqttRoom({ brokers = PUBLIC_BROKERS } = {}) {
+  let mqtt;
+  try {
+    const mod = await import(MQTT_ESM);
+    mqtt = mod.default || mod;
+  } catch (err) {
+    console.warn("mqtt load failed", err);
+    return null;
+  }
+  const hub = new Hub(mqtt, brokers);
+  let ok = false;
+  for (let i = 0; i < brokers.length && !ok; i++) ok = await hub.connectTo(i);
+  if (!ok) {
+    hub.close();
+    clearInterval(hub.timer);
+    return null;
+  }
+  const self = () => Object.freeze([sender(hub.peer, true, { presence: Object.freeze({}), updatedAt: Date.now() })]);
+  return {
+    listed: false,
+    // the open web has no shared table list: friends join by link or code
+    get brokerIndex() {
+      return hub.index;
+    },
+    codeFor(make) {
+      for (let n = 0; n < 200; n++) {
+        const c = make();
+        if (brokerOfCode(c, brokers.length) === hub.index) return c;
+      }
+      return make();
+    },
+    async prepareJoin(code) {
+      const want = brokerOfCode(code, brokers.length);
+      if (want === hub.index && hub.isConnected) return;
+      const ok2 = await hub.connectTo(want);
+      if (!ok2) throw new Error("Can't reach the game server for that table. Check your connection and try again.");
+    },
+    presence: () => Promise.resolve(),
+    peers: self,
+    onPeers(fn) {
+      setTimeout(() => fn({ peers: self(), joined: [], left: [], updated: [] }), 0);
+      return () => {
+      };
+    },
+    on: () => () => {
+    },
+    emit: () => Promise.resolve(),
+    connected: () => hub.isConnected,
+    onConnection: (fn) => hub.onConnection(fn),
+    join: (name) => hub.join(name)
+  };
+}
+
+// site/js/app.js
+var TEST = window.__LUDO_TEST || {};
+var WEB = (window.__LUDO_BUILD || {}).kind === "web";
+var $ = (s) => document.querySelector(s);
+var $$ = (s) => [...document.querySelectorAll(s)];
+var BOT_NAMES = ["Tara", "Kabir", "Mira", "Arjun"];
+var SEAT_VAR = ["var(--red)", "var(--green)", "var(--yellow)", "var(--blue)"];
+var ORD = ["1st", "2nd", "3rd", "4th"];
+var reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+var PAWN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pawn" fill="#fff8ec"/></svg>';
+var store = {
+  get(k, d) {
+    try {
+      const v = localStorage.getItem(k);
+      return v == null ? d : JSON.parse(v);
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {
+    }
+  },
+  del(k) {
+    try {
+      localStorage.removeItem(k);
+    } catch {
+    }
+  }
+};
+var prefs = Object.assign(
+  { name: "", sound: true, fast: false, color: 3, bots: 3, local: null },
+  store.get("ludo3d.prefs", {})
+);
+var savePrefs = () => store.set("ludo3d.prefs", prefs);
+var Sound = {
+  ctx: null,
+  on: prefs.sound !== false,
+  unlock() {
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.55;
+        this.master.connect(this.ctx.destination);
+        const len = Math.floor(this.ctx.sampleRate * 0.6);
+        this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = this.noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {
+      });
+    } catch {
+      this.ctx = null;
+    }
+  },
+  tone(freq, dur, { type = "sine", vol = 0.3, glide = null, delay = 0 } = {}) {
+    const c = this.ctx;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+    g.gain.setValueAtTime(1e-4, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 8e-3);
+    g.gain.exponentialRampToValueAtTime(1e-4, t + dur);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  },
+  noise(dur, { vol = 0.2, freq = 2e3, q = 1, delay = 0, type = "bandpass" } = {}) {
+    const c = this.ctx;
+    const t = c.currentTime + delay;
+    const s = c.createBufferSource();
+    s.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(1e-4, t + dur);
+    s.connect(f).connect(g).connect(this.master);
+    s.start(t, Math.random() * 0.3);
+    s.stop(t + dur + 0.03);
+  },
+  play(name) {
+    if (!this.on || !this.ctx || this.ctx.state !== "running") return;
+    try {
+      switch (name) {
+        case "dice":
+          for (let i = 0; i < 7; i++) this.noise(0.05, { vol: 0.2, freq: 1700 + Math.random() * 1900, q: 3, delay: i * 0.055 + Math.random() * 0.02 });
+          break;
+        case "clack":
+          this.noise(0.07, { vol: 0.32, freq: 1300, q: 2 });
+          this.tone(200, 0.08, { type: "triangle", vol: 0.16 });
+          break;
+        case "hop":
+          this.tone(540 + Math.random() * 60, 0.07, { type: "triangle", vol: 0.14 });
+          break;
+        case "land":
+          this.tone(330, 0.12, { type: "triangle", vol: 0.2 });
+          this.noise(0.05, { vol: 0.12, freq: 900, q: 2 });
+          break;
+        case "exit":
+          this.tone(330, 0.24, { vol: 0.18, glide: 760 });
+          break;
+        case "capture":
+          this.tone(640, 0.36, { type: "sawtooth", vol: 0.08, glide: 130 });
+          this.noise(0.32, { vol: 0.2, freq: 650, q: 0.8, type: "lowpass" });
+          break;
+        case "home":
+          [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.24, { type: "triangle", vol: 0.15, delay: i * 0.08 }));
+          break;
+        case "win":
+          [392, 523, 659, 784, 659, 1047].forEach((f, i) => this.tone(f, i === 5 ? 0.7 : 0.2, { type: "triangle", vol: 0.17, delay: i * 0.12 }));
+          break;
+        case "turn":
+          this.tone(880, 0.12, { vol: 0.11 });
+          this.tone(1320, 0.18, { vol: 0.09, delay: 0.09 });
+          break;
+        default:
+          break;
+      }
+    } catch {
+    }
+  }
+};
+var buzz = (ms) => {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+  }
+};
+function fatal(msg) {
+  $("#fatal").hidden = false;
+  if (msg) $("#fatalMsg").textContent = msg;
+}
+var LudoScene2;
+try {
+  ({ LudoScene: LudoScene2 } = await Promise.resolve().then(() => (init_scene(), scene_exports)));
+} catch (err) {
+  fatal("The 3D engine could not load. Check your connection, then reload the page.");
+  throw err;
+}
+var app = {
+  mode: null,
+  // null (menu) | 'local' | 'table' (online waiting room) | 'online'
+  host: null,
+  config: null,
+  localSeats: /* @__PURE__ */ new Set(),
+  latest: null,
+  recvAt: 0,
+  gid: null,
+  pending: null,
+  overFor: null,
+  screen: null,
+  returnTo: null,
+  lastTurnKey: ""
+};
+var scene;
+try {
+  scene = new LudoScene2($("#scene"), {
+    sfx: (n) => Sound.play(n),
+    onTap,
+    onDisplay,
+    onEvent,
+    reduceMotion
+  });
+  scene.onIdle = () => refreshInputs();
+} catch (err) {
+  fatal();
+  throw err;
+}
+var net = new Online({ roomFactory: WEB ? () => createMqttRoom(TEST.brokers ? { brokers: TEST.brokers } : {}) : null });
+window.__ludo = { app, scene, net, E: engine_exports };
+var speedNow = () => (TEST.speed || 1) * (app.mode === "local" && prefs.fast ? 1.6 : 1);
+var isQuickLike = () => app.mode === "online" || app.config?.kind === "quick";
+function nameOf(S, seat) {
+  const x = S.st[seat];
+  return x.n || COLOR_NAMES[seat];
+}
+function who(S, seat, cap = true) {
+  if (app.localSeats.has(seat) && isQuickLike()) return cap ? "You" : "you";
+  return nameOf(S, seat);
+}
+function whose(S, seat) {
+  if (app.localSeats.has(seat) && isQuickLike()) return "Your";
+  return `${nameOf(S, seat)}'s`;
+}
+function toast(html, ms = 1700) {
+  const el = $("#toast");
+  el.innerHTML = html;
+  el.classList.add("show");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => el.classList.remove("show"), ms);
+}
+var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+function viewSeatFor(seats) {
+  const H = new Set(seats);
+  if (!H.size) return 3;
+  let best = 3;
+  let bestScore = -1;
+  for (let s = 0; s < 4; s++) {
+    const score = (H.has(s) ? 2.1 : 0) + (H.has((s + 3) % 4) ? 2 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best;
+}
+var SCREENS = ["scrMenu", "scrQuick", "scrLocal", "scrOnline", "scrTable", "scrPause", "scrOver", "scrHelp"];
+function show(id) {
+  for (const s of SCREENS) $(`#${s}`).hidden = s !== id;
+  app.screen = id;
+  const inGame = app.mode === "local" || app.mode === "online";
+  $("#title").hidden = inGame || app.mode === "table" || !["scrMenu", "scrQuick"].includes(id);
+  $("#hud").hidden = !inGame;
+  if (id === "scrMenu") renderMenu();
+  updateInsets();
+}
+function hideSheets() {
+  show(null);
+}
+function updateInsets() {
+  requestAnimationFrame(() => {
+    const W = innerWidth;
+    const H = innerHeight;
+    const portrait = H >= W * 1.05;
+    const ins = { top: 10, bottom: 10, left: 10, right: 10 };
+    const inGame = !$("#hud").hidden;
+    if (inGame) {
+      const stacked = portrait || H >= 600;
+      const cards = $$("#hud .seat").filter((c) => !c.hidden);
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        if (stacked) {
+          if (r.top < H / 2) ins.top = Math.max(ins.top, r.bottom + 6);
+          else ins.bottom = Math.max(ins.bottom, H - r.top + 6);
+        } else if (r.left < W / 2) ins.left = Math.max(ins.left, r.right + 8);
+        else ins.right = Math.max(ins.right, W - r.left + 8);
+      }
+      const rb = $("#roll").getBoundingClientRect();
+      if (stacked) ins.bottom = Math.max(ins.bottom, H - rb.top + 6);
+      const mb = $("#menuBtn").getBoundingClientRect();
+      ins.top = Math.max(ins.top, stacked ? mb.bottom + 4 : 12);
+      const chip = $("#netChip");
+      if (!stacked && !chip.hidden) ins.top = Math.max(ins.top, chip.getBoundingClientRect().bottom + 4);
+    } else {
+      const sheet = SCREENS.map((s) => $(`#${s}`)).find((el) => !el.hidden);
+      if (sheet) {
+        const r = sheet.getBoundingClientRect();
+        if (r.left > 4 || r.width < W * 0.7) ins.left = Math.max(ins.left, r.right + 12);
+        else ins.bottom = Math.max(ins.bottom, H - r.top + 6);
+      }
+      const t = $("#title");
+      if (!t.hidden && portrait) ins.top = Math.max(ins.top, t.getBoundingClientRect().bottom + 2);
+    }
+    if (ins.top + ins.bottom > H * 0.6) {
+      const k = H * 0.6 / (ins.top + ins.bottom);
+      ins.top *= k;
+      ins.bottom *= k;
+    }
+    if (ins.left + ins.right > W * 0.6) {
+      const k = W * 0.6 / (ins.left + ins.right);
+      ins.left *= k;
+      ins.right *= k;
+    }
+    scene.setInsets(ins);
+  });
+}
+addEventListener("resize", () => {
+  layoutSeats();
+  updateInsets();
+});
+function savedGame() {
+  const sv = store.get("ludo3d.save", null);
+  if (!sv || !sv.S || !validState(sv.S) || sv.S.ph === "over" || !sv.config) return null;
+  return sv;
+}
+function renderMenu() {
+  const sv = savedGame();
+  $("#goContinue").hidden = !sv;
+  if (sv) {
+    const mins = Math.max(1, Math.round((Date.now() - (sv.t || Date.now())) / 6e4));
+    const names = activeSeats(sv.S).map((s) => nameOf(sv.S, s)).join(", ");
+    $("#continueHint").textContent = `${names} \xB7 saved ${mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`} ago`;
+  }
+  $("#soundToggle").textContent = `Sound: ${Sound.on ? "on" : "off"}`;
+  const st = net.status();
+  if (WEB) $("#onlineHint").textContent = "Invite friends with a link";
+  else {
+    $("#onlineHint").textContent = st.available === false ? "Needs this page open in Claude, shared with friends" : "Play with people you've shared this page with";
+  }
+}
+function toMenu() {
+  stopLocal();
+  app.mode = null;
+  app.latest = null;
+  app.gid = null;
+  app.localSeats = /* @__PURE__ */ new Set();
+  app.pending = null;
+  scene.stopSpin();
+  scene.setHighlights([]);
+  scene.setDieInvite(false);
+  scene.setViewSeat(3);
+  scene.setMenuMode(true);
+  scene.snap(demoState());
+  show("scrMenu");
+}
+function demoState() {
+  const S = newGame({ seats: [0, 1, 2, 3].map((i) => makeSeat("b", BOT_NAMES[i])), first: 3, gid: "demo" });
+  S.tk = [[-1, 12, 30, 56], [5, -1, 51, -1], [20, 2, -1, -1], [44, 9, 9, -1]];
+  S.dv = 6;
+  return S;
+}
+function stopLocal() {
+  app.host?.stop();
+  app.host = null;
+}
+function startLocal(config, resumeState = null) {
+  stopLocal();
+  if (net.table) net.leave();
+  app.mode = "local";
+  app.config = config;
+  app.overFor = null;
+  app.pending = null;
+  const seats = config.seats.map((x) => makeSeat(x.k, x.n));
+  let S = resumeState;
+  if (!S) {
+    const active = [0, 1, 2, 3].filter((i) => seats[i].k !== "x");
+    const humans = active.filter((i) => seats[i].k === "h");
+    const first = config.kind === "quick" && humans.length ? humans[0] : active[Math.floor(Math.random() * active.length)];
+    S = newGame({ seats, rules: config.rules, first });
+  }
+  app.localSeats = new Set([0, 1, 2, 3].filter((i) => S.st[i].k === "h"));
+  app.gid = S.gid;
+  app.latest = S;
+  app.host = new Host(S, {
+    speed: speedNow(),
+    rng: TEST.rng || null,
+    onChange: (next) => {
+      app.latest = next;
+      scene.push(next);
+      saveLocal(next);
+      refreshInputs();
+    }
+  });
+  scene.speed = speedNow();
+  scene.setMenuMode(false);
+  scene.setViewSeat(viewSeatFor([...app.localSeats]));
+  hideSheets();
+  scene.snap(S);
+  layoutSeats();
+  updateInsets();
+  app.host.start();
+}
+function saveLocal(S) {
+  if (app.mode !== "local") return;
+  if (S.ph === "over") store.del("ludo3d.save");
+  else store.set("ludo3d.save", { config: app.config, S, t: Date.now() });
+}
+function renderQuick() {
+  const box = $("#quickColor");
+  box.innerHTML = "";
+  for (let s = 0; s < 4; s++) {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.style.setProperty("--seat", SEAT_VAR[s]);
+    b.setAttribute("aria-pressed", String(prefs.color === s));
+    b.setAttribute("aria-label", COLOR_NAMES[s]);
+    b.innerHTML = PAWN_SVG;
+    b.onclick = () => {
+      prefs.color = s;
+      savePrefs();
+      renderQuick();
+    };
+    box.append(b);
+  }
+  for (const b of $$("#quickBots button")) {
+    b.setAttribute("aria-pressed", String(Number(b.dataset.n) === prefs.bots));
+    b.onclick = () => {
+      prefs.bots = Number(b.dataset.n);
+      savePrefs();
+      renderQuick();
+    };
+  }
+  $("#quickName").value = prefs.name || "";
+}
+function quickConfig() {
+  const c = prefs.color;
+  const name = cleanName($("#quickName").value) || "You";
+  prefs.name = cleanName($("#quickName").value);
+  savePrefs();
+  const seats = [0, 1, 2, 3].map(() => ({ k: "x", n: "" }));
+  seats[c] = { k: "h", n: name };
+  const others = prefs.bots === 1 ? [(c + 2) % 4] : prefs.bots === 2 ? [(c + 1) % 4, (c + 2) % 4] : [(c + 1) % 4, (c + 2) % 4, (c + 3) % 4];
+  for (const o of others) seats[o] = { k: "b", n: BOT_NAMES[o] };
+  return { kind: "quick", seats, rules: {} };
+}
+var RULES = [
+  ["cb", "Capturing earns another roll", ""],
+  ["hb", "Reaching home earns another roll", ""],
+  ["t6", "Three 6s in a row end the turn", ""],
+  ["e1", "A 1 also brings a pawn out", "Off: only a 6 does"],
+  ["am", "Move automatically when there is one choice", ""],
+  ["eh", "Stop when every person has finished", "Bots keep playing when off"]
+];
+function rulesInto(el, values, onChange, disabled = false) {
+  el.innerHTML = "";
+  for (const [key, label, hint] of RULES) {
+    const id = `${el.id}-${key}`;
+    const row = document.createElement("label");
+    row.className = "toggle";
+    row.htmlFor = id;
+    row.innerHTML = `<span>${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ""}</span><input type="checkbox" class="switch" id="${id}">`;
+    const inp = row.querySelector("input");
+    inp.checked = !!values[key];
+    inp.disabled = disabled;
+    inp.onchange = () => onChange(key, inp.checked);
+    el.append(row);
+  }
+}
+function localSetup() {
+  if (!prefs.local) {
+    prefs.local = {
+      seats: [{ k: "h", n: "" }, { k: "h", n: "" }, { k: "x", n: "" }, { k: "x", n: "" }],
+      rules: { ...DEFAULT_RULES }
+    };
+  }
+  return prefs.local;
+}
+function renderLocal() {
+  const cfg = localSetup();
+  const box = $("#localSeats");
+  box.innerHTML = "";
+  cfg.seats.forEach((x, s) => {
+    const row = document.createElement("div");
+    row.className = "seatrow";
+    row.style.setProperty("--seat", SEAT_VAR[s]);
+    const id = `localName${s}`;
+    row.innerHTML = `<span class="dot"></span>
+      <input class="input" id="${id}" maxlength="14" aria-label="${COLOR_NAMES[s]} name" placeholder="${COLOR_NAMES[s]}" value="${esc(x.n || "")}">
+      <span class="seg" role="group" aria-label="${COLOR_NAMES[s]} seat">
+        <button data-k="h" aria-pressed="${x.k === "h"}">Person</button><button data-k="b" aria-pressed="${x.k === "b"}">Bot</button><button data-k="x" aria-pressed="${x.k === "x"}">Off</button>
+      </span>`;
+    const inp = row.querySelector("input");
+    inp.disabled = x.k !== "h";
+    if (x.k === "b") inp.value = BOT_NAMES[s];
+    if (x.k === "x") inp.value = "";
+    inp.oninput = () => {
+      x.n = cleanName(inp.value);
+      savePrefs();
+    };
+    for (const b of row.querySelectorAll(".seg button")) {
+      b.onclick = () => {
+        x.k = b.dataset.k;
+        savePrefs();
+        renderLocal();
+      };
+    }
+    box.append(row);
+  });
+  rulesInto($("#localRules"), cfg.rules, (k, v) => {
+    cfg.rules[k] = v ? 1 : 0;
+    savePrefs();
+  });
+}
+function localConfig() {
+  const cfg = localSetup();
+  const seats = cfg.seats.map((x, s) => ({ k: x.k, n: x.k === "b" ? BOT_NAMES[s] : x.k === "h" ? x.n || "" : "" }));
+  let n = 0;
+  for (const x of seats) if (x.k === "h" && !x.n) x.n = `Player ${++n}`;
+  return { kind: "local", seats, rules: { ...cfg.rules } };
+}
+function layoutSeats() {
+  const D = scene.D;
+  for (const card of $$("#hud .seat")) {
+    const s = Number(card.dataset.seat);
+    const corner = scene.seatCorner(s);
+    card.classList.remove("tl", "tr", "bl", "br");
+    card.classList.add(corner);
+    card.hidden = !D || !isActive(D, s);
+  }
+}
+function seatSub(D, s) {
+  const x = D.st[s];
+  const mine = app.localSeats.has(s);
+  if (D.rk.includes(s)) {
+    const home = D.tk[s].filter((p) => p === FINISH).length;
+    return home === 4 ? "All pawns home" : `${home} of 4 home`;
+  }
+  if (D.ph === "over") return "";
+  const turn = D.tn === s;
+  if (x.k === "h" && x.w === 1) return turn ? "Away (bot)" : "Away";
+  if (x.k === "h" && x.w === 2) return turn ? "Idle (bot)" : "Idle";
+  if (turn) {
+    if (x.k === "b") return "Thinking\u2026";
+    if (mine) return D.ph === "roll" ? isQuickLike() ? "Your turn" : "Roll the die" : "Pick a pawn";
+    return D.ph === "roll" ? "Rolling\u2026" : "Moving\u2026";
+  }
+  if (x.k === "b") return "Bot";
+  if (mine && isQuickLike()) return "You";
+  if (app.mode === "online") return net.S && net.authority?.cid === x.c ? "Host" : "Player";
+  return "Player";
+}
+function renderSeats(D) {
+  layoutSeats();
+  for (const card of $$("#hud .seat")) {
+    const s = Number(card.dataset.seat);
+    if (!isActive(D, s)) continue;
+    const x = D.st[s];
+    card.style.setProperty("--seat", SEAT_VAR[s]);
+    const done = D.tk[s].filter((p) => p === FINISH).length;
+    const rank = D.rk.indexOf(s);
+    const active = D.ph !== "over" && D.tn === s && rank < 0;
+    card.classList.toggle("active", active);
+    card.classList.toggle("done", rank >= 0);
+    card.classList.toggle("away", x.k === "h" && x.w > 0);
+    const label = who(D, s);
+    const html = `<div class="pawn">${PAWN_SVG}</div>
+      <div class="name">${esc(label === "You" && x.n && x.n !== "You" ? x.n : label)}</div>
+      <div class="sub">${esc(seatSub(D, s))}</div>
+      <div class="dots" aria-label="${done} of 4 pawns home">${[0, 1, 2, 3].map((i) => `<i class="${i < done ? "on" : ""}"></i>`).join("")}</div>
+      ${rank >= 0 ? `<div class="rank">${ORD[rank]}</div>` : ""}
+      <div class="timer" hidden><i></i></div>`;
+    if (card.dataset.html !== html) {
+      card.innerHTML = html;
+      card.dataset.html = html;
+    }
+  }
+  renderTimer();
+}
+function renderTimer() {
+  for (const card2 of $$("#hud .seat")) {
+    const bar2 = card2.querySelector(".timer");
+    if (bar2) bar2.hidden = true;
+  }
+  const D = scene.D;
+  const L = app.latest;
+  if (app.mode !== "online" || !D || !L || !L.tl || D.sq !== L.sq || D.ph === "over") return;
+  const card = $(`#hud .seat[data-seat="${D.tn}"]`);
+  const bar = card?.querySelector(".timer");
+  if (!bar) return;
+  const left = Math.max(0, app.recvAt + L.tl - performance.now());
+  const frac = Math.min(1, left / TURN_MS);
+  bar.hidden = false;
+  const i = bar.querySelector("i");
+  i.style.transition = "none";
+  i.style.transform = `scaleX(${frac})`;
+  void i.offsetWidth;
+  i.style.transition = `transform ${left}ms linear`;
+  i.style.transform = "scaleX(0)";
+}
+function setRollFace(v) {
+  const on = {
+    0: [],
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8]
+  }[v] || [];
+  $$("#roll .face i").forEach((el, i) => el.classList.toggle("on", on.includes(i)));
+  $("#roll .face").classList.toggle("one", v === 1);
+}
+function refreshInputs() {
+  const D = scene.D;
+  const L = app.latest;
+  const btn = $("#roll");
+  const lbl = $("#roll .lbl");
+  const playing = app.mode === "local" || app.mode === "online";
+  if (!playing || !D || !L || D.gid !== L.gid) {
+    btn.disabled = true;
+    btn.classList.remove("ready");
+    scene.setDieInvite(false);
+    if (playing) scene.setHighlights([]);
+    return;
+  }
+  if (app.pending) {
+    const p = app.pending;
+    const resolved = L.rn !== p.rn || L.ph !== p.ph || L.tn !== p.seat || performance.now() - p.at > 6e3;
+    if (resolved) {
+      if (p.k === "r" && L.rn === p.rn) {
+        scene.stopSpin();
+        scene.placeDie(D.tn, false);
+      }
+      app.pending = null;
+    }
+  }
+  const caught = scene.isIdle() && D.sq === L.sq;
+  const mine = app.localSeats.has(D.tn);
+  const open = $("#scrPause").hidden || app.mode === "online";
+  const canRoll = caught && open && !app.pending && mine && D.ph === "roll";
+  const moves = D.ph === "move" ? legalMoves(D).filter((m) => D.mv.includes(m.t)) : [];
+  const auto = D.ru.am && movesAreEquivalent(moves);
+  const canPick = caught && open && !app.pending && mine && D.ph === "move" && !auto;
+  btn.disabled = !canRoll;
+  btn.classList.toggle("ready", canRoll);
+  lbl.textContent = canRoll ? "Roll" : mine && D.ph === "move" && !auto ? "Pick" : "Wait";
+  btn.setAttribute("aria-label", canRoll ? "Roll the die" : canPick ? "Pick a glowing pawn to move" : "Waiting");
+  setRollFace(D.dv);
+  scene.setDieInvite(canRoll);
+  scene.setHighlights(canPick ? moves.map((m) => ({ s: D.tn, t: m.t, to: m.to })) : []);
+  const key = `${D.gid}:${D.tn}:${D.rn}:${D.ph}`;
+  if (canRoll && key !== app.lastTurnKey) {
+    if (isQuickLike()) {
+      Sound.play("turn");
+      buzz(18);
+    } else if (app.localSeats.size > 1 && app.lastTurnSeat !== D.tn) {
+      toast(`<b>${esc(nameOf(D, D.tn))}</b>, your turn`, 1100);
+      Sound.play("turn");
+    }
+    app.lastTurnSeat = D.tn;
+  }
+  if (canRoll) app.lastTurnKey = key;
+}
+function doRoll() {
+  const D = scene.D;
+  if ($("#roll").disabled || !D) return;
+  Sound.unlock();
+  const seat = D.tn;
+  if (app.mode === "local") {
+    app.host.roll(seat, D.rn);
+  } else if (app.mode === "online") {
+    app.pending = { k: "r", rn: D.rn, ph: "roll", seat, at: performance.now() };
+    scene.startSpin();
+    net.roll(D.rn);
+  }
+  refreshInputs();
+}
+function doPick(t) {
+  const D = scene.D;
+  if (!D || !scene.highlights.some((h) => h.t === t && h.s === D.tn)) return;
+  if (app.mode === "local") {
+    app.host.move(D.tn, t, D.rn);
+  } else if (app.mode === "online") {
+    app.pending = { k: "p", rn: D.rn, ph: "move", seat: D.tn, at: performance.now() };
+    net.pick(t, D.rn);
+  }
+  scene.setHighlights([]);
+  refreshInputs();
+}
+function onTap(pick) {
+  Sound.unlock();
+  if (!pick) return;
+  if (pick.type === "die") doRoll();
+  else if (pick.type === "token") doPick(pick.t);
+}
+function onDisplay(D) {
+  if (!app.mode || app.mode === "table") return;
+  renderSeats(D);
+  setRollFace(D.dv);
+  if (D.ph === "over" && app.overFor !== D.gid) {
+    app.overFor = D.gid;
+    setTimeout(() => showGameOver(D), 900);
+  }
+  refreshInputs();
+}
+function onEvent(b) {
+  if (!app.mode || app.mode === "table") return;
+  const ev = b.ev;
+  if (!ev) return;
+  const A = who(b, ev.a);
+  const name = (s) => `<b>${esc(who(b, s, false))}</b>`;
+  switch (ev.k) {
+    case "cap":
+      toast(`<b>${esc(A)}</b> captured ${ev.b.map(name).join(" and ")}!`);
+      if (ev.b.some((s) => app.localSeats.has(s)) || app.localSeats.has(ev.a)) buzz(40);
+      break;
+    case "home":
+      toast(`<b>${esc(A)}</b> brought a pawn home`, 1400);
+      break;
+    case "fin":
+      toast(`<b>${esc(A)}</b> finished ${ORD[ev.r - 1]}!`, 2e3);
+      Sound.play("win");
+      scene.celebrate(ev.a);
+      break;
+    case "none":
+      toast(b.dv === 6 ? `A 6 but no move. <b>${esc(A)}</b> roll${A === "You" ? "" : "s"} again` : `${esc(whose(b, ev.a))} roll: ${b.dv}. No move`, 1300);
+      break;
+    case "t6":
+      toast(`Three 6s in a row! ${esc(whose(b, ev.a))} turn is over`, 1700);
+      break;
+    default:
+      break;
+  }
+}
+function showGameOver(D) {
+  if (scene.D?.gid !== D.gid) return;
+  renderOver(D);
+  show("scrOver");
+  scene.celebrate(D.rk[0]);
+  Sound.play("win");
+}
+function renderOver(D) {
+  const winner = D.rk[0];
+  const youWin = app.localSeats.has(winner) && isQuickLike();
+  $("#overTitle").textContent = youWin ? "You win!" : `${nameOf(D, winner)} wins!`;
+  $("#overSub").textContent = `${COLOR_NAMES[winner]} brought every pawn home first.`;
+  const list = $("#overList");
+  list.innerHTML = "";
+  D.rk.forEach((s, i) => {
+    const li = document.createElement("li");
+    li.style.setProperty("--seat", SEAT_VAR[s]);
+    const done = D.tk[s].filter((p) => p === FINISH).length;
+    const x = D.st[s];
+    const kind = x.k === "b" ? "Bot" : app.localSeats.has(s) && isQuickLike() ? "You" : "Player";
+    li.innerHTML = `<span class="place">${ORD[i]}</span><span class="dot"></span><span><b>${esc(nameOf(D, s))}</b><br><small>${kind} \xB7 ${COLOR_NAMES[s]}</small></span><small>${done}/4 home</small>`;
+    list.append(li);
+  });
+  const again = $("#overAgain");
+  const note = $("#overNote");
+  note.textContent = "";
+  if (app.mode === "online") {
+    const hosting = net.role === "host";
+    again.disabled = !hosting;
+    again.textContent = "Play again";
+    note.textContent = hosting ? "Play again keeps everyone in their seats." : "The host can start the next game.";
+    $("#overMenu").textContent = "Leave table";
+  } else {
+    again.disabled = false;
+    $("#overMenu").textContent = "Main menu";
+  }
+}
+function renderOnline() {
+  const st = net.status();
+  const note = $("#onlineState");
+  note.classList.remove("warn");
+  if (WEB) {
+    if (st.available === null) note.textContent = "Connecting to the game server\u2026";
+    else if (st.available === false) {
+      note.classList.add("warn");
+      note.textContent = "Can't reach the game server. Check your internet connection, then try again. Bots and pass and play still work.";
+    } else if (!st.connected) note.textContent = "Reconnecting to the game server\u2026";
+    else note.textContent = app.inviteCode && !net.table ? "Connected. Type your name, then join your friend's table." : "Connected. Open a table, then share the invite link with friends.";
+    $("#netNote").textContent = "Tables run through a free public game server. Anyone with your invite link or code can join, so share it only with friends.";
+    $("#netTablesWrap").hidden = true;
+    $("#netRetry").hidden = st.available !== false;
+  } else if (st.available === null) note.textContent = "Connecting to online play\u2026";
+  else if (st.available === false) {
+    note.classList.add("warn");
+    note.textContent = "Online tables aren't reachable from this view. They work when this page is open in Claude for signed-in people it's shared with. Pass and play and bots work everywhere.";
+  } else {
+    note.textContent = st.connected ? `Connected \xB7 ${st.people} ${st.people === 1 ? "person" : "people"} on this page now` : "Reconnecting\u2026";
+  }
+  const ok = st.available === true && (!WEB || st.connected);
+  const inv = WEB && app.inviteCode && !net.table;
+  $("#netInvite").hidden = !inv;
+  if (inv) {
+    $("#netInvite").textContent = `Join table ${app.inviteCode.toUpperCase()}`;
+    $("#netInvite").disabled = !ok;
+    $("#netCode").value = app.inviteCode.toUpperCase();
+  }
+  $("#netCreate").classList.toggle("primary", !inv);
+  $("#netCreate").disabled = !ok;
+  $("#netJoin").disabled = !ok;
+  $("#netName").value = $("#netName").value || prefs.name || "";
+  const rj = net.rejoinCode;
+  $("#netRejoin").hidden = !ok || !rj || !!net.table;
+  if (rj) $("#netRejoin").textContent = `Rejoin table ${rj.toUpperCase()}`;
+  const box = $("#netTables");
+  box.innerHTML = "";
+  const list = net.tables.filter((t) => !t.mine);
+  if (!list.length) {
+    box.innerHTML = `<div class="empty">${ok ? "No open tables right now. Open one and share the code." : "Not connected."}</div>`;
+  }
+  for (const t of list) {
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.innerHTML = `<span class="ico"><svg><use href="#i-people"/></svg></span><span><b>${esc(t.name)}'s table</b><small>${t.code.toUpperCase()} \xB7 ${t.players}/4 seated${t.playing ? " \xB7 game in play" : t.open ? ` \xB7 ${t.open} open` : ""}</small></span><span class="chev">\u203A</span>`;
+    b.onclick = () => joinOnline(t.code);
+    box.append(b);
+  }
+}
+function netName() {
+  const n = cleanName($("#netName").value);
+  if (n) {
+    prefs.name = n;
+    savePrefs();
+  }
+  return n || prefs.name || "Player";
+}
+async function createOnline() {
+  Sound.unlock();
+  const btn = $("#netCreate");
+  btn.disabled = true;
+  try {
+    await net.createTable(netName(), prefs.color);
+  } catch (err) {
+    toast(esc(err?.message || "Could not open a table. Try again."), 2600);
+    console.warn(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function joinOnline(code) {
+  Sound.unlock();
+  try {
+    await net.joinTable(code, netName(), prefs.color);
+    toast("Joining table\u2026", 1200);
+    if (WEB && app.inviteCode) {
+      app.inviteCode = null;
+      try {
+        history.replaceState(null, "", location.pathname + location.search);
+      } catch {
+      }
+    }
+  } catch (err) {
+    toast(esc(err?.message || "Could not join that table."), 2600);
+  }
+}
+var inviteLink = (code) => `${location.origin}${location.pathname}#join=${code}`;
+var joinCodeFromHash = () => {
+  const m = /^#join=([a-z0-9]{5})$/i.exec(location.hash || "");
+  return m ? m[1].toLowerCase() : null;
+};
+function handleJoinHash() {
+  if (!WEB) return;
+  const code = joinCodeFromHash();
+  if (!code || net.table && net.code === code) return;
+  app.inviteCode = code;
+  renderOnline();
+  show("scrOnline");
+  net.connect().then(() => renderOnline());
+}
+addEventListener("hashchange", handleJoinHash);
+async function shareInvite() {
+  const code = net.code;
+  if (!code) return;
+  const url = inviteLink(code);
+  const text = `Join my Ludo table (code ${code.toUpperCase()})`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Ludo 3D", text, url });
+      return;
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Invite link copied. Paste it to your friends.", 2200);
+  } catch {
+    toast(`Invite link: <b>${esc(url)}</b>`, 6e3);
+  }
+}
+function renderTable(S) {
+  $("#tblCode").textContent = (net.code || "").toUpperCase();
+  $("#tblShare").hidden = !WEB;
+  $("#tblCopy").hidden = WEB;
+  const hosting = net.role === "host";
+  const mine = net.mySeat(S);
+  $("#tableTitle").textContent = hosting ? "Your table" : "Waiting room";
+  const box = $("#tblSeats");
+  box.innerHTML = "";
+  S.st.forEach((x, s) => {
+    const row = document.createElement("div");
+    row.className = `seatrow${s === mine ? " you" : ""}`;
+    row.style.setProperty("--seat", SEAT_VAR[s]);
+    let title = COLOR_NAMES[s];
+    let sub = "";
+    if (x.k === "h") {
+      title = x.n || "Player";
+      sub = [s === mine ? "You" : "", x.c === (hosting ? net.cid : net.authority?.cid) ? "Host" : "", x.w ? "Reconnecting" : ""].filter(Boolean).join(" \xB7 ") || "Player";
+    } else if (x.k === "b") {
+      title = BOT_NAMES[s];
+      sub = "Bot";
+    } else if (x.k === "o") sub = "Open seat";
+    else sub = "Closed";
+    row.innerHTML = `<span class="dot"></span><span class="who"><b>${esc(title)}</b><small>${esc(COLOR_NAMES[s])} \xB7 ${esc(sub)}</small></span><span class="row" style="gap:6px"></span>`;
+    const actions = row.lastElementChild;
+    if (x.k === "o") {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.textContent = "Sit here";
+      b.onclick = () => net.chooseSeat(s);
+      actions.append(b);
+    }
+    if (hosting && x.k !== "h") {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.textContent = { o: "Add bot", b: "Close", x: "Open" }[x.k];
+      b.onclick = () => net.cycleSeat(s);
+      actions.append(b);
+    }
+    box.append(row);
+  });
+  const filled = S.st.filter((x) => x.k === "h" || x.k === "b").length;
+  const start = $("#tblStart");
+  start.hidden = !hosting;
+  start.disabled = filled < 2;
+  start.textContent = filled < 2 ? "Waiting for players" : `Start game \xB7 ${filled} players`;
+  $("#tblHint").textContent = hosting ? WEB ? "Tap Share invite and send the link to friends. Opening it brings them to this table. Open seats left empty are not played." : "Send the code to friends you've shared this page with. Open seats left empty are not played." : mine < 0 ? "Every seat is taken. Tap Sit here if one opens, or watch the game." : "Waiting for the host to start the game.";
+  rulesInto($("#tblRules"), S.ru, (k, v) => net.setRule(k, v), !hosting);
+}
+function enterTable(S) {
+  if (app.mode === "local") stopLocal();
+  const first = app.mode !== "table";
+  app.mode = "table";
+  app.gid = S.gid;
+  app.latest = S;
+  app.localSeats = /* @__PURE__ */ new Set();
+  scene.setMenuMode(false);
+  if (first || scene.D?.gid !== S.gid) {
+    const seat = net.mySeat(S);
+    scene.setViewSeat(seat >= 0 ? seat : 3);
+  }
+  scene.snap(S);
+  renderTable(S);
+  if (app.screen !== "scrTable") show("scrTable");
+}
+function enterOnlineGame(S) {
+  app.mode = "online";
+  app.gid = S.gid;
+  app.overFor = null;
+  app.pending = null;
+  const seat = net.mySeat(S);
+  app.localSeats = new Set(seat >= 0 ? [seat] : []);
+  scene.speed = TEST.speed || 1;
+  scene.setMenuMode(false);
+  scene.setViewSeat(seat >= 0 ? seat : 3);
+  hideSheets();
+  scene.snap(S);
+  layoutSeats();
+  updateInsets();
+}
+net.on("state", (S, recvAt) => {
+  app.latest = S;
+  app.recvAt = recvAt;
+  if (S.ph === "lobby") {
+    enterTable(S);
+    return;
+  }
+  if (app.mode !== "online" || app.gid !== S.gid) enterOnlineGame(S);
+  else scene.push(S);
+  const seat = net.mySeat(S);
+  app.localSeats = new Set(seat >= 0 ? [seat] : []);
+  renderNetChip();
+  refreshInputs();
+});
+net.on("status", () => {
+  if (app.screen === "scrOnline") renderOnline();
+  if (app.screen === "scrMenu") renderMenu();
+  renderNetChip();
+});
+net.on("lobby", () => {
+  if (app.screen === "scrOnline") renderOnline();
+});
+net.on("error", (msg) => {
+  toast(esc(msg), 3200);
+  if (app.mode === "table" || app.mode === "online") toMenu();
+  else if (app.screen === "scrOnline") renderOnline();
+});
+net.on("toast", (msg) => toast(esc(msg), 2600));
+net.on("role", () => {
+  renderNetChip();
+  if (app.mode === "table" && net.S) renderTable(net.S);
+  if (app.screen === "scrOver" && app.latest?.ph === "over") renderOver(app.latest);
+});
+var chipWarnSince = 0;
+function renderNetChip() {
+  const chip = $("#netChip");
+  if (app.mode !== "online") {
+    chip.hidden = true;
+    return;
+  }
+  const st = net.status();
+  const now = performance.now();
+  if (!st.tableConnected) chipWarnSince ||= now;
+  else chipWarnSince = 0;
+  const warn = chipWarnSince && now - chipWarnSince > 2e3;
+  const seat = net.mySeat();
+  chip.hidden = false;
+  chip.classList.toggle("warn", !!warn);
+  chip.textContent = warn ? "Reconnecting\u2026" : `Table ${String(st.code || "").toUpperCase()} \xB7 ${st.atTable} here${seat < 0 ? " \xB7 watching" : ""}${st.role === "host" ? " \xB7 you host" : ""}`;
+}
+setInterval(renderNetChip, 1500);
+function renderPause() {
+  $("#pSound").textContent = `Sound: ${Sound.on ? "on" : "off"}`;
+  $("#pSpeed").hidden = app.mode !== "local";
+  $("#pSpeed").textContent = `Game speed: ${prefs.fast ? "fast" : "normal"}`;
+  $("#pRestart").hidden = app.mode !== "local";
+  $("#pQuit").textContent = app.mode === "online" ? "Leave table" : "Leave game";
+  const note = $("#pauseNote");
+  note.innerHTML = "";
+  if (app.mode === "local") note.textContent = "The game is paused while this menu is open. Leaving keeps it saved on this device.";
+  if (app.mode === "online") {
+    const S = app.latest;
+    const seat = net.mySeat(S);
+    note.textContent = "Online games keep going while this menu is open.";
+    if (S && seat < 0 && S.ph !== "over") {
+      for (let s = 0; s < 4; s++) {
+        const x = S.st[s];
+        if (x.k === "h" && x.w === 1) {
+          const b = document.createElement("button");
+          b.className = "btn wide";
+          b.style.marginTop = "8px";
+          b.textContent = `Take over ${COLOR_NAMES[s]} (${x.n || "away"})`;
+          b.onclick = () => {
+            net.takeSeat(s);
+            hideSheets();
+            toast("Asking the host for that seat\u2026", 1500);
+          };
+          note.append(b);
+        }
+      }
+    }
+    if (net.role === "host" && S?.ph === "over") {
+      const b = document.createElement("button");
+      b.className = "btn wide";
+      b.style.marginTop = "8px";
+      b.textContent = "Back to the waiting room";
+      b.onclick = () => net.toLobby();
+      note.append(b);
+    }
+  }
+}
+function openPause() {
+  renderPause();
+  if (app.host) app.host.stop();
+  show("scrPause");
+  refreshInputs();
+}
+function closePause() {
+  hideSheets();
+  if (app.mode === "local" && app.host) {
+    app.host.stopped = false;
+    app.host.plan();
+  }
+  refreshInputs();
+}
+$("#goQuick").onclick = () => {
+  Sound.unlock();
+  renderQuick();
+  show("scrQuick");
+};
+$("#quickStart").onclick = () => {
+  Sound.unlock();
+  startLocal(quickConfig());
+};
+$("#goLocal").onclick = () => {
+  Sound.unlock();
+  renderLocal();
+  show("scrLocal");
+};
+$("#localStart").onclick = () => {
+  Sound.unlock();
+  const cfg = localConfig();
+  const active = cfg.seats.filter((x) => x.k !== "x");
+  const err = $("#localErr");
+  err.hidden = true;
+  if (active.length < 2) {
+    err.textContent = "Choose at least two players. Bots count.";
+    err.hidden = false;
+    return;
+  }
+  if (!active.some((x) => x.k === "h")) cfg.rules.eh = 0;
+  startLocal(cfg);
+};
+$("#goOnline").onclick = () => {
+  Sound.unlock();
+  renderOnline();
+  show("scrOnline");
+  if (net.available !== true) net.connect().then(() => renderOnline());
+};
+$("#netRetry").onclick = () => {
+  net.connect().then(() => renderOnline());
+  renderOnline();
+};
+$("#netInvite").onclick = () => {
+  if (app.inviteCode) joinOnline(app.inviteCode);
+};
+$("#tblShare").onclick = shareInvite;
+$("#goContinue").onclick = () => {
+  Sound.unlock();
+  const sv = savedGame();
+  if (sv) startLocal(sv.config, sv.S);
+};
+$("#goHelp").onclick = () => {
+  app.returnTo = "scrMenu";
+  show("scrHelp");
+};
+$("#soundToggle").onclick = () => {
+  Sound.on = !Sound.on;
+  prefs.sound = Sound.on;
+  savePrefs();
+  Sound.unlock();
+  renderMenu();
+};
+for (const b of $$(".sheet .back")) {
+  b.onclick = () => {
+    if (app.screen === "scrHelp" && app.returnTo === "scrPause") {
+      renderPause();
+      show("scrPause");
+    } else toMenu();
+  };
+}
+$("#netCreate").onclick = createOnline;
+$("#netJoin").onclick = () => joinOnline($("#netCode").value);
+$("#netCode").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") joinOnline($("#netCode").value);
+});
+$("#netRejoin").onclick = () => {
+  const c = net.rejoinCode;
+  if (c) joinOnline(c);
+};
+$("#tblLeave").onclick = async () => {
+  await net.leave();
+  toMenu();
+};
+$("#tblCopy").onclick = async () => {
+  const code = (net.code || "").toUpperCase();
+  try {
+    await navigator.clipboard.writeText(code);
+    toast(`Copied <b>${esc(code)}</b>`, 1200);
+  } catch {
+    toast(`Table code: <b>${esc(code)}</b>`, 2400);
+  }
+};
+$("#tblStart").onclick = () => {
+  Sound.unlock();
+  const err = net.startGame(BOT_NAMES);
+  if (err) toast(esc(err), 2200);
+};
+$("#roll").onclick = doRoll;
+$("#menuBtn").onclick = () => {
+  Sound.unlock();
+  openPause();
+};
+$("#viewBtn").onclick = () => scene.resetView();
+$("#pauseClose").onclick = closePause;
+$("#pSound").onclick = () => {
+  Sound.on = !Sound.on;
+  prefs.sound = Sound.on;
+  savePrefs();
+  Sound.unlock();
+  renderPause();
+};
+$("#pSpeed").onclick = () => {
+  prefs.fast = !prefs.fast;
+  savePrefs();
+  scene.speed = speedNow();
+  if (app.host) app.host.speed = speedNow();
+  renderPause();
+};
+$("#pRules").onclick = () => {
+  app.returnTo = "scrPause";
+  show("scrHelp");
+};
+$("#pRestart").onclick = () => {
+  if (app.config) startLocal(app.config);
+};
+$("#pQuit").onclick = async () => {
+  if (app.mode === "online") await net.leave();
+  toMenu();
+};
+$("#overAgain").onclick = () => {
+  Sound.unlock();
+  if (app.mode === "online") net.playAgain();
+  else if (app.config) startLocal(app.config);
+};
+$("#overMenu").onclick = async () => {
+  if (app.mode === "online") await net.leave();
+  toMenu();
+};
+addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.key === "Escape") {
+    if (app.screen === "scrPause") closePause();
+    else if (app.mode === "local" || app.mode === "online") {
+      if (!app.screen) openPause();
+    }
+    return;
+  }
+  if (app.screen) return;
+  if (e.key === " " || e.key === "Enter") {
+    if (e.target instanceof HTMLButtonElement) return;
+    e.preventDefault();
+    doRoll();
+  } else if (/^[1-4]$/.test(e.key)) {
+    const h = scene.highlights[Number(e.key) - 1];
+    if (h) doPick(h.t);
+  }
+});
+addEventListener("pointerdown", () => Sound.unlock(), { once: true, capture: true });
+function snapshot() {
+  if (app.mode === "local" && app.host) return { local: { config: app.config, S: app.host.S } };
+  if ((app.mode === "online" || app.mode === "table") && net.code) return { table: net.code };
+  return {};
+}
+function boot(data = {}) {
+  scene.setMenuMode(true);
+  scene.snap(demoState());
+  show("scrMenu");
+  if (WEB) {
+    handleJoinHash();
+  } else {
+    net.connect().then((ok) => {
+      renderMenu();
+      if (app.screen === "scrOnline") renderOnline();
+      if (ok && data?.table && /^[a-z0-9]{5}$/.test(data.table) && !app.mode) joinOnline(data.table);
+    });
+  }
+  if (data?.local?.S && validState(data.local.S) && data.local.config && data.local.S.ph !== "over") {
+    startLocal(data.local.config, data.local.S);
+  }
+}
+try {
+  window.claude?.hot?.snapshot?.(() => snapshot());
+} catch {
+}
+if (window.claude?.hot?.ready) window.claude.hot.ready(boot);
+else boot(window.claude?.hot?.data ?? {});
+
+</script>
+</body>
+</html>
